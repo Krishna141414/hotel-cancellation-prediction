@@ -9,7 +9,7 @@ results and score new bookings.
 ![Tests](https://img.shields.io/badge/tests-141%20passing-22D3B6)
 ![Lint](https://img.shields.io/badge/lint-ruff-FFB020)
 
-> **Live web app:** [hotel-cancellation-prediction.onrender.com](https://hotel-cancellation-prediction.onrender.com) _(free tier: the first visit after idle can take ~30-60 s)_
+> **Live web app:** [hotel-cancellation-prediction-ltod.onrender.com](https://hotel-cancellation-prediction-ltod.onrender.com) _(free tier: the first visit after idle can take ~30-60 s)_
 > &nbsp;|&nbsp; **Decisions log:** [`docs/decisions.md`](docs/decisions.md)
 > &nbsp;|&nbsp; **Walkthrough notebook:** [`notebooks/modeling.ipynb`](notebooks/modeling.ipynb)
 > &nbsp;|&nbsp; **Task 2 (data preprocessing):** [hotel-booking-preprocessing](https://github.com/Krishna141414/hotel-booking-preprocessing)
