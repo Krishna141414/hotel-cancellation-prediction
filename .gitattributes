@@ -1,0 +1,5 @@
+# Normalise line endings for text files
+* text=auto eol=lf
+
+# Never touch the raw dataset bytes
+data/raw/*.csv -text
