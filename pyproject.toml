@@ -26,7 +26,7 @@ convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
 # Notebook cells are explained with markdown, not docstrings.
-"*.ipynb" = ["D", "ANN", "E402"]
+"*.ipynb" = ["D", "ANN", "E402", "E501"]  # long f-string print lines in display cells
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
