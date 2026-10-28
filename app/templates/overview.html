@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+{% set m = final.test_tuned %}
+<section class="hero reveal">
+  <div class="hero-grid">
+    <div>
+      <span class="eyebrow">Task 3 · Machine learning application &amp; model evaluation</span>
+      <h1>Will this hotel booking be <span class="grad-text">canceled?</span></h1>
+      <p class="hero-lead">Six models trained, cross-validated, tuned and stress-tested on {{ "{:,}".format(dataset.clean_rows) }} real bookings, so a hotel can see cancellations coming and plan overbooking with confidence.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="{{ url_for('predict') }}">Try the predictor →</a>
+        <a class="btn" href="{{ url_for('models') }}">See the model comparison</a>
+      </div>
+    </div>
+    <div class="card card-glow">
+      <div class="card-head">
+        <div>
+          <span class="badge-selected">★ Selected model</span>
+          <h2 style="margin-top:.55rem">{{ final.name }}</h2>
+          <p>Chosen on cross-validation, confirmed once on the untouched test set.</p>
+        </div>
+      </div>
+      <div class="metric-trio">
+        <div><b data-count="{{ m.average_precision }}" data-decimals="3">{{ "%.3f"|format(m.average_precision) }}</b><span>PR-AUC</span></div>
+        <div><b data-count="{{ m.roc_auc }}" data-decimals="3">{{ "%.3f"|format(m.roc_auc) }}</b><span>ROC-AUC</span></div>
+        <div><b data-count="{{ m.f1 }}" data-decimals="3">{{ "%.3f"|format(m.f1) }}</b><span>F1</span></div>
+      </div>
+      <p class="small muted" style="margin:.8rem 0 0">Test set, decision threshold {{ "%.2f"|format(final.threshold) }} (tuned on out-of-fold training predictions).</p>
+    </div>
+  </div>
+</section>
+
+<section class="grid grid-4 reveal">
+  <div class="kpi card accent-pink">
+    <div class="label">Cancellations caught</div>
+    <div class="value" data-count="{{ m.recall * 100 }}" data-decimals="1" data-suffix="%">{{ "%.1f"|format(m.recall * 100) }}%</div>
+    <div class="sub">recall on the test set</div>
+  </div>
+  <div class="kpi card">
+    <div class="label">Alarms that were right</div>
+    <div class="value" data-count="{{ m.precision * 100 }}" data-decimals="1" data-suffix="%">{{ "%.1f"|format(m.precision * 100) }}%</div>
+    <div class="sub">precision on the test set</div>
+  </div>
+  <div class="kpi card accent-teal">
+    <div class="label">Models compared</div>
+    <div class="value" data-count="{{ data.models|length }}">{{ data.models|length }}</div>
+    <div class="sub">baseline + 5 algorithms + 2 tuned</div>
+  </div>
+  <div class="kpi card accent-marigold">
+    <div class="label">Model size</div>
+    <div class="value" data-count="{{ final_model.size_mb * 1000 if final_model.size_mb < 1 else final_model.size_mb }}" data-decimals="0" data-suffix="{{ ' KB' if final_model.size_mb < 1 else ' MB' }}">{{ final_model.size_mb }}</div>
+    <div class="sub">predicts 1,000 bookings in {{ "%.0f"|format(final_model.predict_ms_per_1k) }} ms</div>
+  </div>
+</section>
+
+<section class="grid grid-3 section">
+  <article class="card reveal span-2">
+    <div class="card-head"><h2>The problem</h2><span class="chip chip-info">Binary classification</span></div>
+    <p>Predict <code>is_canceled</code> for a booking at the moment it is made. About <strong>{{ "%.1f"|format(dataset.train_cancel_rate * 100) }}%</strong> of bookings are canceled. If a hotel knew which ones, it could overbook just enough to keep rooms full without having to relocate guests.</p>
+    <ul class="list-tight">
+      <li><strong>Missed cancellation</strong> (false negative): the room stays empty and revenue is lost.</li>
+      <li><strong>False alarm</strong> (false positive): the room is overbooked and a guest may need relocating.</li>
+      <li>Because of the imbalance, accuracy alone would mislead: always guessing "not canceled" is already {{ "%.1f"|format((1 - dataset.test_cancel_rate) * 100) }}% accurate. Models are ranked on <strong>PR-AUC</strong>, with recall, precision, F1 and ROC-AUC alongside.</li>
+    </ul>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><h2>Class balance</h2></div>
+    <div class="chart-box short"><canvas id="balance-chart" aria-label="Share of canceled bookings"></canvas></div>
+  </article>
+</section>
+
+<section class="section reveal">
+  <div class="section-title"><h2>Pipeline</h2><span class="muted small">one command: <code>python main.py</code></span></div>
+  <div class="flow">
+    <div class="flow-step"><h3>Data</h3><p>{{ "{:,}".format(dataset.raw_rows) }} raw rows → {{ "{:,}".format(dataset.clean_rows) }} after Task 2 cleaning</p></div>
+    <div class="flow-step"><h3>Features</h3><p>{{ dataset.inputs }} leakage-checked inputs; reservation status dropped</p></div>
+    <div class="flow-step"><h3>Split</h3><p>Stratified 80/20; test set locked until the end</p></div>
+    <div class="flow-step"><h3>Compare</h3><p>{{ setup.cv_folds }}-fold CV of 6 models, each in its own preprocessing pipeline</p></div>
+    <div class="flow-step"><h3>Tune &amp; select</h3><p>RandomizedSearchCV on the top 2, then select on CV, gap, size and speed</p></div>
+    <div class="flow-step"><h3>Evaluate</h3><p>Threshold tuning, one-time test evaluation, temporal drift check</p></div>
+  </div>
+</section>
+
+<section class="grid grid-2 section">
+  <article class="card reveal">
+    <div class="card-head"><h2>Dataset</h2><span class="chip">Antonio, Almeida &amp; Nunes, 2019</span></div>
+    <p>Real bookings from a city hotel and a resort hotel in Portugal (arrivals July 2015 – August 2017). Cleaning and feature engineering are reused unchanged from <a href="https://github.com/Krishna141414/hotel-booking-preprocessing">Task 2</a>.</p>
+    <div class="table-wrap">
+      <table class="kv">
+        <tbody>
+          <tr><td>Raw rows × columns</td><td class="num">{{ "{:,}".format(dataset.raw_rows) }} × {{ dataset.raw_columns }}</td></tr>
+          <tr><td>After cleaning (duplicates, invalid rows)</td><td class="num">{{ "{:,}".format(dataset.clean_rows) }}</td></tr>
+          <tr><td>Train / test (stratified)</td><td class="num">{{ "{:,}".format(dataset.train_rows) }} / {{ "{:,}".format(dataset.test_rows) }}</td></tr>
+          <tr><td>Model inputs (numeric · binary · categorical)</td><td class="num">{{ dataset.numeric|length }} · {{ dataset.binary|length }} · {{ dataset.categorical|length }}</td></tr>
+          <tr><td>Dropped for leakage</td><td class="num">reservation_status(_date), assigned_room_type, booking_changes</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><h2>Validation setup</h2></div>
+    <ul class="why-list">
+      <li><span><strong>Hold-out test set</strong> (20%, stratified, seed {{ setup.random_state }}), used once after the model was frozen.</span></li>
+      <li><span><strong>Stratified {{ setup.cv_folds }}-fold CV</strong> on the training set for every comparison, tuning and selection decision.</span></li>
+      <li><span><strong>No leakage</strong>: scaling, log transforms and one-hot categories are fitted inside each CV fold.</span></li>
+      <li><span><strong>Temporal check</strong>: trained on earlier arrivals and tested on the latest period to measure drift.</span></li>
+      <li><span><strong>Threshold</strong> picked from out-of-fold predictions ({{ final.threshold }}), not from the test set.</span></li>
+    </ul>
+  </article>
+</section>
+
+<section class="section reveal">
+  <div class="section-title"><h2>Top of the leaderboard</h2><a class="small" href="{{ url_for('models') }}">full comparison →</a></div>
+  <div class="leaderboard" id="mini-leaderboard"><div class="skeleton"></div></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/overview.js') }}"></script>
+{% endblock %}

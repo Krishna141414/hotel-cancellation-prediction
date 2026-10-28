@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Model comparison{% endblock %}
+{% block content %}
+<header class="page-head reveal">
+  <span class="eyebrow">Model comparison</span>
+  <h1>Six algorithms, one fair race</h1>
+  <p>Every model ran on the same stratified {{ setup.cv_folds }}-fold split of the training set, with its own preprocessing fitted inside each fold. They're ranked on mean CV <strong>{{ setup.primary_label }}</strong>. Test-set scores come from a single evaluation after the final model was frozen.</p>
+</header>
+
+<div class="switcher-bar"><span class="label">Model</span><div class="pills" id="model-switcher"></div></div>
+
+<section class="grid grid-3">
+  <article class="card span-2 reveal">
+    <div class="card-head"><div><h2>Leaderboard</h2><p>Ranked by mean CV {{ setup.primary_label }} ± fold std. Click a row to select a model.</p></div></div>
+    <div class="leaderboard" id="leaderboard"><div class="skeleton"></div></div>
+  </article>
+  <article class="card why-card reveal" id="why-card"><div class="skeleton"></div></article>
+</section>
+
+<section class="grid grid-2 section">
+  <article class="card reveal">
+    <div class="card-head">
+      <div><h2>Metrics by model</h2><p>Grouped bars; the selected model is drawn solid.</p></div>
+      <div class="segmented" id="metric-source"><button type="button" data-value="cv" aria-pressed="true">CV mean</button><button type="button" data-value="test" aria-pressed="false">Test</button></div>
+    </div>
+    <div class="chart-box tall"><canvas id="metrics-chart" aria-label="Grouped bar chart of metrics per model"></canvas></div>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h2>Radar: all metrics at once</h2><p>Test scores, selected model vs final model vs baseline.</p></div></div>
+    <div class="chart-box tall"><canvas id="radar-chart" aria-label="Radar chart of test metrics"></canvas></div>
+  </article>
+</section>
+
+<section class="card section reveal">
+  <div class="card-head"><div><h2>Full comparison table</h2><p>Click a column to sort. CV = mean of {{ setup.cv_folds }} folds (std in grey); Train = mean over the CV training folds.</p></div></div>
+  <div class="table-wrap"><table id="comparison-table"></table></div>
+</section>
+
+<section class="grid grid-2 section">
+  <article class="card reveal">
+    <div class="card-head"><div><h2>ROC curves</h2><p>Test set. Dashed line = random guessing.</p></div></div>
+    <div class="chart-box tall"><canvas id="roc-chart" aria-label="ROC curves"></canvas></div>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h2>Precision–recall curves</h2><p>Test set. Dashed line = share of canceled bookings.</p></div></div>
+    <div class="chart-box tall"><canvas id="pr-chart" aria-label="Precision-recall curves"></canvas></div>
+  </article>
+</section>
+
+<section class="grid grid-2 section">
+  <article class="card reveal">
+    <div class="card-head"><div><h2>Confusion matrix</h2><p id="cm-caption">Test set at threshold 0.50.</p></div></div>
+    <div id="confusion"></div>
+  </article>
+  <article class="card reveal" id="model-detail"><div class="skeleton"></div></article>
+</section>
+
+<section class="card section reveal">
+  <div class="card-head">
+    <div><h2>Head-to-head</h2><p>Pick any two models and compare them side by side (test set).</p></div>
+    <div class="toolbar"><select id="h2h-a" aria-label="First model"></select><span class="muted">vs</span><select id="h2h-b" aria-label="Second model"></select></div>
+  </div>
+  <div class="grid grid-3">
+    <div class="span-2"><div class="chart-box"><canvas id="h2h-chart" aria-label="Head-to-head metric comparison"></canvas></div></div>
+    <div id="h2h-summary" class="stack"></div>
+  </div>
+  <div class="grid grid-2" style="margin-top:1rem"><div id="h2h-cm-a"></div><div id="h2h-cm-b"></div></div>
+</section>
+
+<section class="grid grid-3 section">
+  <article class="card reveal">
+    <div class="card-head"><div><h3>Fit time</h3><p>Full training set, seconds (log scale).</p></div></div>
+    <div class="chart-box short"><canvas id="fit-chart" aria-label="Fit time per model"></canvas></div>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h3>Prediction time</h3><p>Milliseconds per 1,000 bookings (log scale).</p></div></div>
+    <div class="chart-box short"><canvas id="predict-chart" aria-label="Prediction time per model"></canvas></div>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h3>File size</h3><p>Compressed joblib, MB (log scale). Free host = 512 MB RAM.</p></div></div>
+    <div class="chart-box short"><canvas id="size-chart" aria-label="Model size per model"></canvas></div>
+  </article>
+</section>
+
+<section class="card section reveal">
+  <div class="card-head"><div><h2>Hyperparameter tuning</h2><p>RandomizedSearchCV on the top 2 models, same {{ setup.cv_folds }} folds. Each dot is one sampled setting: train vs CV score shows which settings overfit.</p></div></div>
+  <div class="grid grid-2" id="tuning"></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/models.js') }}"></script>
+{% endblock %}

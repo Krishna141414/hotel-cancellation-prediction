@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Overfitting analysis{% endblock %}
+{% block content %}
+<header class="page-head reveal">
+  <span class="eyebrow">Overfitting &amp; underfitting</span>
+  <h1>Who memorises, who generalises?</h1>
+  <p>A model <strong>overfits</strong> when it scores far better on data it trained on than on new data (train − CV gap above {{ setup.overfit_gap }} {{ setup.primary_label }}). It <strong>underfits</strong> when train and CV are close but both are low (more than {{ setup.underfit_margin }} below the best model). Train scores come from the CV training folds, so every number here is honest.</p>
+</header>
+
+<div class="switcher-bar"><span class="label">Model</span><div class="pills" id="model-switcher"></div></div>
+
+<section class="grid grid-3">
+  <article class="card span-2 reveal">
+    <div class="card-head"><div><h2>Train vs CV vs test</h2><p>{{ setup.primary_label }} per model. Big blue-over-orange gaps = memorising.</p></div></div>
+    <div class="chart-box tall"><canvas id="gap-chart" aria-label="Train, CV and test score per model"></canvas></div>
+  </article>
+  <article class="card reveal" id="gap-detail"><div class="skeleton"></div></article>
+</section>
+
+<section class="grid grid-2 section">
+  <article class="card reveal">
+    <div class="card-head"><div><h2>Learning curve</h2><p id="lc-caption">Train and CV score as the training set grows (±1 std band).</p></div></div>
+    <div class="chart-box"><canvas id="learning-chart" aria-label="Learning curve"></canvas></div>
+    <p class="legend-note" id="lc-note"></p>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h2>Validation curve: tree depth</h2><p>Decision Tree {{ setup.primary_label }} by <code>max_depth</code>, {{ setup.cv_folds }}-fold CV.</p></div></div>
+    <div class="chart-box"><canvas id="validation-chart" aria-label="Validation curve by tree depth"></canvas></div>
+    <p class="legend-note" id="vc-note"></p>
+  </article>
+</section>
+
+<section class="card section reveal">
+  <div class="card-head">
+    <div><h2>Training replay: gradient boosting, stage by stage</h2><p id="replay-caption">Score after each boosting iteration on a validation split carved out of the training set.</p></div>
+    <div class="toolbar"><button class="btn btn-small" type="button" id="replay-play">▶ Play</button><input type="range" id="replay-scrub" min="1" max="1" value="1" aria-label="Boosting iteration" style="width:180px"><span class="mono small" id="replay-iter">1</span></div>
+  </div>
+  <div class="chart-box"><canvas id="replay-chart" aria-label="Boosting training replay"></canvas></div>
+</section>
+
+<section class="card section reveal">
+  <div class="card-head">
+    <div><h2>Decision-boundary playground</h2><p>Small models trained on just two features. Colour = predicted cancellation probability; dots = real test bookings (pink canceled, teal kept).</p></div>
+    <div class="toolbar"><label class="small muted" for="pg-pair">Features</label><select id="pg-pair"></select></div>
+  </div>
+  <div class="playground">
+    <div class="viz-box"><canvas id="pg-canvas" width="560" height="560" aria-label="Decision boundary"></canvas></div>
+    <div class="stack">
+      <div class="pills" id="pg-models" style="flex-direction:column;align-items:stretch"></div>
+      <div class="score-pair"><div><b id="pg-train">–</b><span>Train {{ setup.primary_label }}</span></div><div><b id="pg-test">–</b><span>Test {{ setup.primary_label }}</span></div></div>
+      <div><div class="legend-ramp"></div><div class="small muted" style="display:flex;justify-content:space-between"><span>0% kept</span><span>50%</span><span>100% canceled</span></div></div>
+      <p class="small" id="pg-note"></p>
+    </div>
+  </div>
+</section>
+
+<section class="grid grid-3 section">
+  <article class="card span-2 reveal">
+    <div class="card-head"><div><h2>Temporal validation: does it hold up next season?</h2><p id="temporal-caption"></p></div></div>
+    <div class="chart-box"><canvas id="temporal-chart" aria-label="Random split vs temporal split score"></canvas></div>
+  </article>
+  <article class="card reveal" id="temporal-detail"><div class="skeleton"></div></article>
+</section>
+
+<section class="grid grid-3 section">
+  <article class="card span-2 reveal">
+    <div class="card-head"><div><h2>Leakage check: post-booking columns</h2><p>CV {{ setup.primary_label }} of the final model when suspect columns are added or removed (training set only).</p></div></div>
+    <div class="chart-box short"><canvas id="ablation-chart" aria-label="Leakage ablation"></canvas></div>
+  </article>
+  <article class="card reveal">
+    <h3>How to read it</h3>
+    <ul class="list-tight small">
+      <li><strong>assigned_room_type</strong> is set at check-in, which canceled bookings never reach, so it quietly encodes the answer.</li>
+      <li><strong>booking_changes</strong> is a count taken at the outcome date: bookings canceled early had less time to change.</li>
+      <li>Both lift the score, which is exactly the warning sign. They're excluded so the model works at booking time.</li>
+      <li><strong>days_in_waiting_list</strong> is known when the booking is confirmed, so it stays (and barely matters).</li>
+      <li><strong>country</strong> carries a lot of signal. It's kept as a booking-time field, but flagged in the decisions log.</li>
+    </ul>
+  </article>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/overfitting.js') }}"></script>
+{% endblock %}

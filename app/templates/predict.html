@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Predict{% endblock %}
+{% block content %}
+<header class="page-head reveal">
+  <span class="eyebrow">Predict &amp; decide</span>
+  <h1>How likely is <span class="grad-text">this</span> booking to cancel?</h1>
+  <p>Every change updates the prediction live (what-if mode). Start from a typical booking or load a real one from the test set. The final model is <strong>{{ final.name }}</strong>, with a tuned decision threshold of <strong>{{ "%.2f"|format(final.threshold) }}</strong>.</p>
+</header>
+
+<div class="predict-layout">
+  <form class="card reveal" id="booking-form" novalidate>
+    <div class="card-head">
+      <div><h2>Booking details</h2><p>All inputs the model uses, grouped like a reservation screen.</p></div>
+      <div class="toolbar">
+        <button class="btn btn-primary btn-small" type="button" id="random-btn">🎲 Random real booking</button>
+        <button class="btn btn-small" type="button" id="reset-btn">Typical booking</button>
+      </div>
+    </div>
+    <div id="form-fields"><div class="skeleton" style="min-height:420px"></div></div>
+  </form>
+
+  <aside class="sticky-col">
+    <section class="card card-glow gauge-card reveal" aria-live="polite">
+      <svg class="gauge" viewBox="0 0 320 190" role="img" aria-label="Cancellation risk gauge">
+        <defs>
+          <linearGradient id="gauge-grad" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" style="stop-color:var(--teal)"/>
+            <stop offset="50%" style="stop-color:var(--marigold-bright)"/>
+            <stop offset="100%" style="stop-color:var(--pink)"/>
+          </linearGradient>
+        </defs>
+        <path class="track" d="M30 160 A130 130 0 0 1 290 160" fill="none" stroke-width="22" stroke-linecap="round"/>
+        <path id="gauge-fill" d="M30 160 A130 130 0 0 1 290 160" fill="none" stroke="url(#gauge-grad)" stroke-width="22" stroke-linecap="round" pathLength="100" stroke-dasharray="0 100" style="transition: stroke-dasharray .9s cubic-bezier(.2,.9,.25,1)"/>
+        <line id="gauge-threshold" class="tick" x1="160" y1="16" x2="160" y2="44" style="transform-origin:160px 160px"/>
+        <g class="needle" id="gauge-needle"><line x1="160" y1="160" x2="160" y2="52" style="stroke:var(--ink)" stroke-width="4" stroke-linecap="round"/><circle cx="160" cy="160" r="9" style="fill:var(--ink)"/></g>
+        <text x="30" y="186" font-size="11" style="fill:var(--ink-3)" text-anchor="middle">0%</text>
+        <text x="290" y="186" font-size="11" style="fill:var(--ink-3)" text-anchor="middle">100%</text>
+      </svg>
+      <div class="gauge-value" id="prob-value">–</div>
+      <div><span class="verdict low" id="verdict">Waiting for input…</span></div>
+      <p class="actual-note" id="actual-note"></p>
+      <p class="small muted" style="margin:0">Marker = decision threshold <b class="mono" id="threshold-label"></b></p>
+    </section>
+
+    <section class="card reveal">
+      <div class="card-head"><div><h3>Why this prediction</h3><p>Change in probability if this field were set to the typical booking's value instead.</p></div></div>
+      <div class="contrib" id="contributions"><div class="skeleton"></div></div>
+    </section>
+  </aside>
+</div>
+
+<section class="grid grid-2 section">
+  <article class="card reveal">
+    <div class="card-head"><div><h3>What if… lead time changes?</h3><p>Same booking, only lead time varied.</p></div></div>
+    <div class="chart-box short"><canvas id="sweep-lead_time" aria-label="Probability by lead time"></canvas></div>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h3>What if… the daily rate changes?</h3><p>Same booking, only ADR varied.</p></div></div>
+    <div class="chart-box short"><canvas id="sweep-adr" aria-label="Probability by ADR"></canvas></div>
+  </article>
+</section>
+
+<section class="grid grid-2 section">
+  <article class="card reveal">
+    <div class="card-head">
+      <div><h2>Decision threshold</h2><p>Slide to see how precision, recall and F1 trade off on the test set. The verdict above uses this threshold.</p></div>
+      <button class="btn btn-small" type="button" id="threshold-reset">Reset to tuned</button>
+    </div>
+    <div class="field" style="margin-bottom:1rem">
+      <label for="threshold-slider">Threshold <output id="threshold-out" class="mono"></output></label>
+      <input type="range" id="threshold-slider" min="0.05" max="0.95" step="0.01">
+    </div>
+    <div class="metric-trio" style="margin-bottom:1rem">
+      <div><b id="th-precision">–</b><span>Precision</span></div>
+      <div><b id="th-recall">–</b><span>Recall</span></div>
+      <div><b id="th-f1">–</b><span>F1</span></div>
+    </div>
+    <div class="chart-box short"><canvas id="threshold-chart" aria-label="Precision, recall and F1 by threshold"></canvas></div>
+    <p class="legend-note" id="threshold-note"></p>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h2>Business impact calculator</h2><p>Set what each mistake costs. The best threshold is picked on out-of-fold training predictions, and the savings are measured on the test set.</p></div></div>
+    <div class="cost-inputs">
+      <label>Missed cancellation (empty room), €<input type="number" id="cost-fn" min="0" step="10"></label>
+      <label>False alarm (overbooked guest), €<input type="number" id="cost-fp" min="0" step="10"></label>
+    </div>
+    <div class="grid grid-2" style="margin-top:1rem">
+      <div class="callout"><div class="small muted">Best threshold</div><div class="savings" id="best-threshold" style="color:var(--primary-ink)">–</div><div class="small" id="best-detail"></div></div>
+      <div class="callout"><div class="small muted">Saved per 1,000 bookings vs no model</div><div class="savings" id="savings">–</div><div class="small" id="savings-detail"></div></div>
+    </div>
+    <div class="chart-box short" style="margin-top:1rem"><canvas id="cost-chart" aria-label="Cost of mistakes by threshold"></canvas></div>
+    <button class="btn btn-small" type="button" id="apply-threshold" style="margin-top:.6rem">Use this threshold above</button>
+  </article>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/predict.js') }}"></script>
+{% endblock %}

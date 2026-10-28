@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Explainability{% endblock %}
+{% block content %}
+<header class="page-head reveal">
+  <span class="eyebrow">Explainability</span>
+  <h1>What makes a booking likely to cancel?</h1>
+  <p>Three views that agree with each other: <strong>permutation importance</strong> of the final model (how much the test score drops when one input is shuffled), the trees' own <strong>impurity importance</strong>, and the readable top of a <strong>decision tree</strong>.</p>
+</header>
+
+<section class="grid grid-3">
+  <article class="card span-2 reveal">
+    <div class="card-head"><div><h2>Permutation importance</h2><p id="perm-caption">Drop in test score when an input is shuffled (mean ± std over repeats).</p></div></div>
+    <div class="chart-box tall"><canvas id="perm-chart" aria-label="Permutation importance"></canvas></div>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h2>In plain English</h2><p>Cancellation rates in the training data for the top drivers.</p></div></div>
+    <div class="stack" id="insights"><div class="skeleton"></div></div>
+  </article>
+</section>
+
+<section class="grid grid-2 section">
+  <article class="card reveal">
+    <div class="card-head">
+      <div><h2>Tree-model importance</h2><p>Impurity-based, summed per input column (training fit).</p></div>
+      <div class="segmented" id="tree-imp-toggle"></div>
+    </div>
+    <div class="chart-box tall"><canvas id="tree-imp-chart" aria-label="Tree feature importance"></canvas></div>
+  </article>
+  <article class="card reveal">
+    <div class="card-head"><div><h2>Logistic Regression weights</h2><p>Largest weights on scaled inputs: pink raises the odds of cancelling, teal lowers them.</p></div></div>
+    <div class="chart-box tall"><canvas id="coef-chart" aria-label="Logistic regression coefficients"></canvas></div>
+  </article>
+</section>
+
+<section class="card section reveal">
+  <div class="card-head">
+    <div><h2>Inside the Decision Tree</h2><p>Top 4 levels of the Decision Tree from the comparison. Node colour = actual cancel rate of the training bookings that reach it. Click a node to fold/unfold it; drag to pan, scroll or pinch to zoom.</p></div>
+  </div>
+  <div class="viz-box">
+    <div class="viz-controls"><button class="btn btn-small" type="button" id="tree-reset">Reset view</button><button class="btn btn-small" type="button" id="tree-expand">Expand all</button></div>
+    <svg class="tree-svg" id="tree-svg" role="img" aria-label="Interactive decision tree"></svg>
+  </div>
+  <div class="small muted" style="display:flex;align-items:center;gap:.6rem;margin-top:.6rem"><span>0% canceled</span><div class="legend-ramp" style="width:160px"></div><span>100%</span><span style="margin-left:auto">Static version: <code>reports/figures/12_decision_tree_top_levels.png</code></span></div>
+</section>
+
+<section class="card section reveal">
+  <div class="card-head">
+    <div><h2>Falling bookings</h2><p>Real test bookings drop through the top 3 splits and land in the bucket the tree predicts. Dot colour is what really happened: <span class="down"><b>teal = kept</b></span>, <span class="up"><b>pink = canceled</b></span>.</p></div>
+    <button class="btn btn-primary btn-small" type="button" id="fall-replay">↻ Replay</button>
+  </div>
+  <div class="viz-box"><svg class="falling-svg" id="falling-svg" role="img" aria-label="Animation of bookings falling through the decision tree"></svg></div>
+  <div class="falling-stats" style="margin-top:.7rem"><span>Landed <b id="fall-landed">0</b> / <b id="fall-total">0</b></span><span>Correct <b id="fall-correct">0</b></span><span>Accuracy of 3 splits alone <b id="fall-acc">–</b></span></div>
+</section>
+
+<section class="card section reveal" id="pca-section">
+  <div class="card-head"><div><h2>3-D booking space</h2><p id="pca-caption">2,000 training bookings projected onto 3 principal components of the scaled, one-hot inputs. Drag to rotate, scroll to zoom.</p></div></div>
+  <div class="plotly-box" id="pca-plot"><div class="skeleton" style="height:100%"></div></div>
+  <p class="legend-note" id="pca-note"></p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="{{ url_for('static', filename='js/explain.js') }}"></script>
+{% endblock %}

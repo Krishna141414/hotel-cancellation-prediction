@@ -1,0 +1,15 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Everything the server needs (final model + precomputed JSON) is committed, so the
+# build only installs dependencies - no training on the free instance.
+services:
+  - type: web
+    name: hotel-cancellation-prediction
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.app:app
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.14.0

@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Not found{% endblock %}
+{% block content %}
+<section class="hero" style="text-align:center">
+  <span class="eyebrow">404</span>
+  <h1>This page was <span class="grad-text">canceled</span>.</h1>
+  <p class="hero-lead" style="margin-inline:auto">Our model didn't see that one coming. The page you asked for does not exist.</p>
+  <div class="actions" style="justify-content:center"><a class="btn btn-primary" href="{{ url_for('overview') }}">Back to the overview</a></div>
+</section>
+{% endblock %}
