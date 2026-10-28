@@ -296,6 +296,27 @@ def rank_models(results: dict[str, ModelResult], metric: str = config.PRIMARY_ME
 # ---------------------------------------------------------------------------
 # Hyperparameter tuning
 # ---------------------------------------------------------------------------
+def one_standard_error_index(cv_results: dict[str, Any]) -> int:
+    """Pick the least-overfitting setting that is statistically as good as the best.
+
+    One-standard-error rule: every setting whose mean CV score is within one fold
+    standard deviation of the best is treated as equally good; among those, the one
+    with the smallest train - CV gap (least memorisation) wins.
+
+    Args:
+        cv_results: ``cv_results_`` of a search run with ``return_train_score=True``.
+
+    Returns:
+        Index of the chosen setting.
+    """
+    metric = config.PRIMARY_METRIC
+    cv = np.asarray(cv_results[f"mean_test_{metric}"])
+    train = np.asarray(cv_results[f"mean_train_{metric}"])
+    best = int(np.nanargmax(cv))
+    within = np.flatnonzero(cv >= cv[best] - cv_results[f"std_test_{metric}"][best])
+    return int(within[np.argmin(train[within] - cv[within])])
+
+
 def tune_model(
     key: str,
     groups: FeatureGroups,
@@ -305,8 +326,9 @@ def tune_model(
 ) -> ModelResult:
     """RandomizedSearchCV over ``config.PARAM_DISTRIBUTIONS`` on the same CV folds.
 
-    Every metric is recorded for every candidate; the best candidate is chosen on
-    the primary metric and refitted on the full training set.
+    Every metric is recorded for every candidate. The setting is chosen with the
+    one-standard-error rule (:func:`one_standard_error_index`) and refitted on the
+    full training set.
 
     Args:
         key: Base algorithm key.
@@ -325,7 +347,7 @@ def tune_model(
         config.PARAM_DISTRIBUTIONS[key],
         n_iter=n_iter,
         scoring=make_scorers(),
-        refit=config.PRIMARY_METRIC,
+        refit=one_standard_error_index,
         cv=cv_splitter(),
         return_train_score=True,
         random_state=config.RANDOM_STATE,
@@ -361,6 +383,11 @@ def tune_model(
         key=lambda row: row["cv"],
         reverse=True,
     )
+    top_cv = candidates[0]["cv"]
+    for row in candidates:
+        row["chosen"] = row["params"] == {
+            n.removeprefix("clf__"): v for n, v in cv_results["params"][best].items()
+        }
     result = ModelResult(
         key=tuned_key,
         pipeline=build_pipeline(key, groups, best_params),
@@ -375,6 +402,8 @@ def tune_model(
             "fits": n_iter * config.CV_FOLDS,
             "search_time_s": round(elapsed, 1),
             "best_params": best_params,
+            "rule": "one standard error: within 1 fold-std of the top CV score, smallest gap",
+            "top_cv": top_cv,
             "candidates": candidates,
         },
         fitted=search.best_estimator_,

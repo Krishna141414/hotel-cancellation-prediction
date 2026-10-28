@@ -120,7 +120,7 @@ def new_figure(
     fig = Figure(figsize=figsize)
     FigureCanvasAgg(fig)  # a real canvas: plot_tree needs a renderer to measure text
     axes = fig.subplots(nrows, ncols, squeeze=False)
-    fig.text(0.01, 0.985, title, fontsize=14, fontweight=600, va="top")
+    fig.text(0.01, 0.985, title, fontsize=14, fontweight="bold", va="top")
     fig.text(0.01, 0.925, subtitle, fontsize=10, color=PALETTE["ink_secondary"], va="top")
     gradient = np.linspace(0, 1, 256).reshape(1, -1)
     rule = fig.add_axes((0.01, 0.885, 0.18, 0.006))
@@ -297,14 +297,16 @@ def _curve_figure(summary: dict[str, Any], kind: str) -> Figure:
     models = _models(summary)
     all_keys = [m["key"] for m in models]
     final_key = summary["final"]["key"]
+    metric = "roc_auc" if kind == "roc" else "average_precision"
+    leader = max(_models(summary, include_baseline=False), key=lambda m: m["test"][metric])
     if kind == "roc":
-        title = "Every model beats chance; the boosted model bends closest to the corner"
+        title = f"Every model beats chance; {leader['name']} has the highest ROC-AUC"
         subtitle = "ROC curve on the held-out test set (area = ROC-AUC)"
-        metric, xlabel, ylabel = "roc_auc", "False positive rate", "True positive rate (recall)"
+        xlabel, ylabel = "False positive rate", "True positive rate (recall)"
     else:
-        title = "Precision stays high for longer with the selected model"
+        title = f"{leader['name']} keeps precision highest across recall levels"
         subtitle = "Precision-recall curve on the held-out test set (area = PR-AUC)"
-        metric, xlabel, ylabel = "average_precision", "Recall", "Precision"
+        xlabel, ylabel = "Recall", "Precision"
     fig, (ax,) = new_figure(title, subtitle, figsize=(8, 6))
     for model in models:
         points = np.asarray(model["curves"][kind])
@@ -373,8 +375,16 @@ def plot_confusion_matrix(summary: dict[str, Any]) -> Figure:
         The figure.
     """
     final = summary["final"]
+    (_, fp_default), (_, tp_default) = final["confusion_default"]
+    (_, fp_tuned), (_, tp_tuned) = final["confusion_tuned"]
+    if final["threshold"] > config.DEFAULT_THRESHOLD:
+        fewer_alarms, fewer_catches = fp_default - fp_tuned, tp_default - tp_tuned
+        trade = f"{fewer_alarms:,} fewer false alarms for {fewer_catches:,} fewer catches"
+    else:
+        more_catches, more_alarms = tp_tuned - tp_default, fp_tuned - fp_default
+        trade = f"{more_catches:,} more catches for {more_alarms:,} more false alarms"
     fig, axes = new_figure(
-        f"{final['name']}: the tuned threshold trades a few false alarms for more caught cancels",
+        f"{final['name']}: the tuned threshold gives {trade}",
         "Confusion matrix on the held-out test set - default 0.5 threshold (left) vs tuned (right)",
         ncols=2,
         figsize=(11, 4.8),
@@ -489,7 +499,7 @@ def plot_learning_curves(summary: dict[str, Any]) -> Figure:
             mean, std = np.asarray(curve[f"{prefix}_mean"]), np.asarray(curve[f"{prefix}_std"])
             ax.plot(sizes, mean, color=color, marker="o", markersize=4, label=label)
             ax.fill_between(sizes, mean - std, mean + std, color=color, alpha=0.15, linewidth=0)
-        ax.set_title(names[key], loc="left", fontsize=10, fontweight=600)
+        ax.set_title(names[key], loc="left", fontsize=10, fontweight="bold")
         ax.set_xlabel("Training rows")
         ax.set_ylabel(PRIMARY_LABEL)
         ax.set_ylim(0.4, 1.02)
@@ -661,7 +671,7 @@ def plot_tree_importances(summary: dict[str, Any]) -> Figure:
     for ax, (key, table), color in zip(axes, tables.items(), colors, strict=False):
         top = table[: config.TOP_FEATURES_TO_SHOW - 3]
         _importance_bars(ax, [r["feature"] for r in top], [r["importance"] for r in top], color)
-        ax.set_title(config.MODEL_NAMES[base_key(key)], loc="left", fontsize=10, fontweight=600)
+        ax.set_title(config.MODEL_NAMES[base_key(key)], loc="left", fontsize=10, fontweight="bold")
         ax.set_xlabel("Importance (sums to 1)")
     fig.subplots_adjust(left=0.18, wspace=0.75)
     return fig
@@ -677,8 +687,15 @@ def plot_decision_tree(model: Pipeline, depth: int = config.FALLING_TREE_DEPTH) 
     Returns:
         The figure.
     """
+    names_out = model.named_steps["prep"].get_feature_names_out()
+    tree = model.named_steps["clf"].tree_
+    first = [
+        names_out[tree.feature[n]].split("__", 1)[-1]
+        for n in (0, tree.children_left[0], tree.children_right[0])
+        if tree.children_left[n] != tree.children_right[n]
+    ]
     fig, (ax,) = new_figure(
-        "The first splits: deposit type, country and lead time",
+        f"The tree splits first on {first[0]}, then on {' and '.join(dict.fromkeys(first[1:]))}",
         f"Top {depth} levels of the Decision Tree (class-weighted; orange = more canceled)",
         figsize=(16, 7.5),
     )
@@ -759,7 +776,7 @@ def plot_speed_vs_score(summary: dict[str, Any]) -> Figure:
     models = _models(summary, include_baseline=False)
     all_keys = [m["key"] for m in summary["models"]]
     fig, (ax,) = new_figure(
-        "The selected model is near the top-left: accurate, quick and small",
+        "Accuracy vs cost: the selected model scores at the top with a small file",
         f"CV {PRIMARY_LABEL} vs fit time on the full training set (bubble area = file size)",
     )
     sizes = np.asarray([m["size_mb"] for m in models])

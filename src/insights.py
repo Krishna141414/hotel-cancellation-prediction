@@ -404,6 +404,11 @@ def feature_insight(rows: pd.DataFrame, column: str, groups: FeatureGroups) -> d
         yes, no = target[rows[column] > 0].mean(), target[rows[column] == 0].mean()
         text = f"Bookings with {column} = 1 cancel {yes:.0%}, vs {no:.0%} when it is 0."
         return {"feature": column, "text": text, "high_rate": yes, "low_rate": no}
+    if rows[column].nunique() <= config.INSIGHT_MAX_COUNT_VALUES:
+        # Small counts (requests, parking spaces, ...): "none" vs "1 or more".
+        some, none = target[rows[column] > 0].mean(), target[rows[column] == 0].mean()
+        text = f"Bookings with 1+ {column} cancel {some:.0%}, vs {none:.0%} with none."
+        return {"feature": column, "text": text, "high_rate": some, "low_rate": none}
     low_cut, high_cut = rows[column].quantile([0.25, 0.75])
     if low_cut == high_cut:
         yes, no = target[rows[column] > low_cut].mean(), target[rows[column] <= low_cut].mean()

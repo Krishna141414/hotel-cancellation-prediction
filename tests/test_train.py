@@ -109,3 +109,14 @@ def test_depth_validation_curve_shape(
     monkeypatch.setattr(config, "VALIDATION_DEPTHS", [1, 3, 8])
     curve = train.depth_validation_curve(groups, *xy)
     assert len(curve["cv_mean"]) == 3 and curve["best_depth"] in [1, 3, 8]
+
+
+def test_one_standard_error_rule_prefers_smaller_gap() -> None:
+    """Within one std of the best CV score, the least-overfitting setting wins."""
+    metric = config.PRIMARY_METRIC
+    cv_results = {
+        f"mean_test_{metric}": [0.800, 0.797, 0.780],
+        f"std_test_{metric}": [0.004, 0.004, 0.004],
+        f"mean_train_{metric}": [0.950, 0.850, 0.790],
+    }
+    assert train.one_standard_error_index(cv_results) == 1

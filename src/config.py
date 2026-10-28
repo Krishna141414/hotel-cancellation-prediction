@@ -321,6 +321,8 @@ OVERBOOKING_COST: float = 400.0  # false alarm -> overbooked guest has to be rel
 # ---------------------------------------------------------------------------
 PERMUTATION_REPEATS: int = 5
 TOP_FEATURES_TO_SHOW: int = 15
+# Numeric columns with at most this many distinct values are described as "none vs 1+".
+INSIGHT_MAX_COUNT_VALUES: int = 10
 
 # ---------------------------------------------------------------------------
 # Figures and palette (shared by matplotlib figures and the web app)

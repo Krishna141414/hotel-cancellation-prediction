@@ -49,7 +49,7 @@ def test_curve_points_are_downsampled_and_bounded() -> None:
     [
         ("dummy", 0.27, 0.27, 0.8, "Baseline"),
         ("tree", 1.0, 0.5, 0.8, "Strong overfitting"),
-        ("rf", 0.87, 0.80, 0.8, "Overfitting"),
+        ("rf", 0.87, 0.80, 0.8, "Mild overfitting"),
         ("logreg", 0.69, 0.68, 0.8, "Underfitting"),
         ("hgb", 0.82, 0.79, 0.8, "Good fit"),
     ],

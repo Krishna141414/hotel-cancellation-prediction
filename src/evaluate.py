@@ -194,7 +194,7 @@ def diagnose_fit(
             "reason": "No learning at all: always predicts the majority class.",
         }
     if gap > overfit_gap:
-        severity = "Strong overfitting" if gap > 2 * overfit_gap else "Overfitting"
+        severity = "Strong overfitting" if gap > 2 * overfit_gap else "Mild overfitting"
         return {
             "label": severity,
             "reason": f"Train score is {gap:.3f} above CV: it memorises training rows "
