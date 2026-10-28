@@ -44,7 +44,7 @@ full Task 2 log.
   positive rate (0.275), which makes "how much better than guessing" easy to read.
 - **Alternative considered:** ROC-AUC. Also threshold-free, but it rewards ranking the large
   "not canceled" class well and looks optimistic under imbalance (the baseline is 0.5 and
-  every real model is > 0.84). Both are shown everywhere. F1 was rejected as the primary
+  every real model is > 0.68). Both are shown everywhere. F1 was rejected as the primary
   metric because it depends on a threshold.
 
 ## 2. Data reused from Task 2
@@ -56,7 +56,8 @@ full Task 2 log.
   runtime: this repo runs on its own.
 - **Result:** 119,390 raw rows -> 87,208 clean rows (exact duplicates, zero-guest rows,
   negative ADR, impossible counts removed; ADR capped at 335; structural missing values
-  filled) -> 33 model inputs (18 numeric, 5 binary flags, 10 categorical).
+  filled). Task 2 selected 33 inputs; this project drops `country` / `is_domestic` as a
+  leakage precaution (3.5), leaving **31 model inputs** (18 numeric, 4 binary flags, 9 categorical).
 - **Why reuse, not redo:** Task 2 already explored, cleaned and justified every step
   ([Task 2 decisions log](https://github.com/Krishna141414/hotel-booking-preprocessing/blob/main/docs/decisions.md)).
   Re-deriving it would only risk inconsistencies between the two submissions.
@@ -79,12 +80,12 @@ model's 5-fold CV PR-AUC with suspected columns added or removed, on the trainin
 
 | Variant | Inputs | CV PR-AUC | vs final |
 |---|---:|---:|---:|
-| Selected features (final) | 33 | 0.7794 ± 0.0051 | +0.0000 |
-| + booking_changes | 34 | 0.7859 ± 0.0046 | +0.0065 |
-| + assigned_room_type | 34 | 0.7926 ± 0.0048 | +0.0132 |
-| + both post-booking columns | 35 | 0.7985 ± 0.0047 | +0.0191 |
-| - days_in_waiting_list | 32 | 0.7791 ± 0.0051 | -0.0003 |
-| - country & is_domestic | 31 | 0.7146 ± 0.0057 | -0.0648 |
+| Selected features (final) | 31 | 0.7149 ± 0.0050 | +0.0000 |
+| + booking_changes | 32 | 0.7219 ± 0.0049 | +0.0070 |
+| + assigned_room_type | 32 | 0.7307 ± 0.0047 | +0.0158 |
+| + both post-booking columns | 33 | 0.7374 ± 0.0052 | +0.0225 |
+| - days_in_waiting_list | 30 | 0.7144 ± 0.0049 | -0.0005 |
+| + country & is_domestic | 33 | 0.7785 ± 0.0059 | +0.0636 |
 
 ### 3.1 `reservation_status`, `reservation_status_date` -> dropped (hard leakage)
 - They *are* the outcome (`Canceled` / `Check-Out` / `No-Show`) and its date. Task 2 measured a
@@ -93,7 +94,7 @@ model's 5-fold CV PR-AUC with suspected columns added or removed, on the trainin
 ### 3.2 `assigned_room_type` -> dropped
 - **Why:** the room is (re)assigned at check-in, which canceled bookings never reach. A room
   that differs from the reserved one almost always means "the guest arrived" (Task 2: changed
-  rooms cancel 4.7% vs 31.5%). It lifts CV PR-AUC by +0.0132, a gain that would vanish
+  rooms cancel 4.7% vs 31.5%). It lifts CV PR-AUC by +0.0158, a gain that would vanish
   in production.
 - **Alternative:** keep it for bookings already checked in. Not useful: those are not the
   ones we need to predict.
@@ -101,23 +102,44 @@ model's 5-fold CV PR-AUC with suspected columns added or removed, on the trainin
 ### 3.3 `booking_changes` -> dropped (the safer option)
 - **Why:** it counts changes "from the moment the booking was entered until check-in or
   cancellation", a snapshot taken at the **outcome** date. A booking canceled after 3 days had
-  3 days to collect changes, one kept for 200 days had 200. It adds +0.0065 CV PR-AUC,
-  and together with `assigned_room_type` +0.0191.
+  3 days to collect changes, one kept for 200 days had 200. It adds +0.0070 CV PR-AUC,
+  and together with `assigned_room_type` +0.0225.
 - **Alternative considered:** keep it if predictions are refreshed daily with the change count
   *so far*. That needs a time-stamped change history the dataset does not have.
 
 ### 3.4 `days_in_waiting_list` -> kept
 - **Why:** the days a booking waited *before it was confirmed* are known at confirmation, so it
-  is a legitimate booking-time input. Removing it changes CV PR-AUC by only -0.0003, so
+  is a legitimate booking-time input. Removing it changes CV PR-AUC by only -0.0005, so
   it is neither leaky nor important.
 
-### 3.5 `country` / `is_domestic` -> kept, flagged for review
-- **Why kept:** nationality is entered with the booking (Task 2 kept it). It is the strongest
-  single driver (Portuguese guests cancel 36% vs 24%), and removing it costs
-  -0.0648 CV PR-AUC.
-- **Risk, stated openly:** some hotel systems only confirm nationality at check-in, and the
-  dataset paper does not say exactly when it was recorded. If the hotel confirms that country
-  is corrected at check-in, drop both columns (the model still reaches 0.7146).
+### 3.5 `country` / `is_domestic` -> dropped (the safer option), kept as an ablation
+- **What:** both columns are removed from the final model (`config.DROPPED_FEATURES`,
+  `config.COUNTRY_COLUMNS`). The Predict page no longer asks for nationality.
+- **Why:** canceled bookings never reach check-in. Some hotel systems only record or correct a
+  guest's nationality *at check-in*, and the dataset paper does not say when `country` was
+  filled in. If that's the case here, the column partly encodes "this guest showed up", which
+  is the outcome. The data can't tell a real pattern from that artefact, and the pattern is
+  suspiciously strong: Portuguese guests are 31% of bookings but 41% of
+  cancellations (36% vs 24% cancel rate). Per the project rule ("if a decision
+  could go either way, take the safer option"), the column is excluded so that every input
+  is known when the booking is made.
+- **What it costs:** the same final-model settings with and without the two columns
+  (`main.py::country_comparison`, evaluation only; the drop was decided on the leakage
+  argument above, not on these numbers):
+
+  | HistGradientBoosting (tuned) | Without country (deployed, 31 inputs) | With country (33 inputs) | Difference |
+  |---|---:|---:|---:|
+  | CV PR-AUC | 0.7149 | 0.7785 | +0.0636 |
+  | CV ROC-AUC | 0.8517 | 0.9038 | +0.0521 |
+  | Test PR-AUC | 0.7210 | 0.7831 | +0.0621 |
+  | Test ROC-AUC | 0.8553 | 0.9064 | +0.0511 |
+  | Test F1 @ 0.54 | 0.6557 | 0.7187 | +0.0630 |
+  | Test Recall @ 0.54 | 0.7062 | 0.8237 | +0.1175 |
+  | Test Precision @ 0.54 | 0.6120 | 0.6375 | +0.0255 |
+
+- **Alternative considered:** keep it (Task 2 did, and the first version of this project
+  did). Worth revisiting if the hotel confirms nationality is entered at booking time: then
+  the "with country" model is the better one.
 
 ## 4. Validation setup
 
@@ -213,7 +235,7 @@ model's 5-fold CV PR-AUC with suspected columns added or removed, on the trainin
 ### 6.1 RandomizedSearchCV on the top 2 models by CV PR-AUC
 - **What:** the two best untuned models (**Random Forest and HistGradientBoosting**) are tuned with
   `RandomizedSearchCV` on the same 5 folds, recording every metric and train scores.
-  Budget: Random Forest 12 settings x 5 folds = 60 fits (240 s); HistGradientBoosting 20 settings x 5 folds = 100 fits (232 s). Search spaces are in `config.PARAM_DISTRIBUTIONS`.
+  Budget: Random Forest 12 settings x 5 folds = 60 fits (169 s); HistGradientBoosting 20 settings x 5 folds = 100 fits (193 s). Search spaces are in `config.PARAM_DISTRIBUTIONS`.
 - **Why random search:** for the same budget it explores more values per important
   hyperparameter than a grid (Bergstra & Bengio, 2012); a full grid over 5 HGB parameters
   would be 1,280 settings x 5 folds.
@@ -228,58 +250,63 @@ model's 5-fold CV PR-AUC with suspected columns added or removed, on the trainin
   train-CV gap from 0.081 to 0.146 for +0.008 CV, about one fold-std (0.007). Differences
   inside one std are noise, so among them the less-memorising model is the better bet on new
   data (the same idea as the one-SE rule for regularisation paths).
-- **Effect:** Random Forest: CV 0.7786 vs 0.7843 for the top setting (fold std 0.0048), train-CV gap 0.1204; HistGradientBoosting: CV 0.7794 vs 0.7859 for the top setting (fold std 0.0051), train-CV gap 0.0601.
+- **Effect:** Random Forest: CV 0.7157 vs 0.7183 for the top setting (fold std 0.0045), train-CV gap 0.1299; HistGradientBoosting: CV 0.7149 vs 0.7203 for the top setting (fold std 0.0050), train-CV gap 0.0546.
 - **Alternative:** plain argmax (more variance) or adding regularisation-only search spaces.
 
 ### 6.3 Tuning results
 | Model | Untuned CV | Tuned CV | Chosen settings |
 |---|---:|---:|---|
-| Random Forest | 0.7731 | 0.7786 (top setting 0.7843) | `n_estimators=350`, `min_samples_leaf=4`, `max_features=0.35`, `max_depth=18` |
-| HistGradientBoosting | 0.7776 | 0.7794 (top setting 0.7859) | `min_samples_leaf=80`, `max_leaf_nodes=31`, `max_iter=500`, `learning_rate=0.05`, `l2_regularization=1.0` |
+| Random Forest | 0.6956 | 0.7157 (top setting 0.7183) | `n_estimators=150`, `min_samples_leaf=8`, `max_features=0.2`, `max_depth=24` |
+| HistGradientBoosting | 0.7147 | 0.7149 (top setting 0.7203) | `min_samples_leaf=40`, `max_leaf_nodes=63`, `max_iter=300`, `learning_rate=0.03`, `l2_regularization=0.1` |
 
-- **Honest reading:** tuning adds little CV score (+0.002 for HistGradientBoosting, +0.006 for
-  Random Forest). Its real value is the **smaller gap** (HGB 0.081 -> 0.060, RF 0.227 -> 0.120)
-  from stronger regularisation (bigger leaves, shallower trees), which also held up best on the
-  temporal split (10.2). The defaults of both libraries were already well chosen for this data.
+- **Honest reading:** for HistGradientBoosting tuning adds almost no CV score (+0.0002); its
+  value is the **smaller gap** (0.081 -> 0.055) from stronger regularisation (bigger leaves,
+  lower learning rate). Random Forest gains more (+0.020) because its defaults grow trees to
+  single bookings; bigger leaves and fewer features per split halve its gap (0.304 -> 0.130).
+  The tuned models also hold up slightly better on the temporal split (10.2).
 
 ## 7. Overfitting / underfitting and model selection
 
 ### 7.1 Diagnosis rules (`src/evaluate.py::diagnose_fit`)
 - **Overfitting:** train - CV gap above 0.05 PR-AUC ("mild"), above 0.10 ("strong").
 - **Underfitting:** small gap, but CV more than 0.05 below the best model.
-- **Why these numbers:** fold std is about 0.004-0.014, so 0.05 is far beyond noise. 0.05 below
+- **Why these numbers:** fold std is about 0.002-0.011, so 0.05 is far beyond noise. 0.05 below
   the best is roughly the difference between a linear and a non-linear model here.
 
 ### 7.2 Results
 | Model | Train | CV (± std) | Test | Gap | Diagnosis |
 |---|---:|---:|---:|---:|---|
 | Dummy (most frequent) | 0.2751 | 0.2751 ± 0.0000 | 0.2751 | 0.0000 | Baseline |
-| Logistic Regression | 0.6828 | 0.6826 ± 0.0140 | 0.6802 | 0.0002 | Underfitting |
-| Decision Tree | 0.9999 | 0.4790 ± 0.0048 | 0.4773 | 0.5209 | Strong overfitting |
-| Random Forest | 0.9999 | 0.7731 ± 0.0055 | 0.7762 | 0.2268 | Strong overfitting |
-| Random Forest (tuned) | 0.8990 | 0.7786 ± 0.0048 | 0.7851 | 0.1204 | Strong overfitting |
-| HistGradientBoosting | 0.8586 | 0.7776 ± 0.0043 | 0.7872 | 0.0810 | Mild overfitting |
-| HistGradientBoosting (tuned) | 0.8395 | 0.7794 ± 0.0051 | 0.7856 | 0.0601 | Mild overfitting |
-| K-Nearest Neighbors | 1.0000 | 0.6682 ± 0.0119 | 0.6755 | 0.3318 | Strong overfitting |
+| Logistic Regression | 0.6735 | 0.6728 ± 0.0077 | 0.6715 | 0.0007 | Good fit |
+| Decision Tree | 0.9997 | 0.4214 ± 0.0016 | 0.4294 | 0.5783 | Strong overfitting |
+| Random Forest | 0.9995 | 0.6956 ± 0.0042 | 0.7040 | 0.3039 | Strong overfitting |
+| Random Forest (tuned) | 0.8456 | 0.7157 ± 0.0045 | 0.7232 | 0.1299 | Strong overfitting |
+| HistGradientBoosting | 0.7957 | 0.7147 ± 0.0054 | 0.7220 | 0.0810 | Mild overfitting |
+| HistGradientBoosting (tuned) | 0.7695 | 0.7149 ± 0.0050 | 0.7210 | 0.0546 | Mild overfitting |
+| K-Nearest Neighbors | 1.0000 | 0.6132 ± 0.0113 | 0.6214 | 0.3868 | Strong overfitting |
 
 - **Decision Tree (no depth limit):** memorises the training set (train 1.0) and scores far
   worse on CV. Each leaf holds one or a few bookings, so its probabilities are almost all 0 or
   1, which also hurts PR-AUC. **Strong overfitting.**
 - **KNN:** distance weighting gives every training row weight 1 for itself (train 1.0). CV is
   well below the tree ensembles. **Strong overfitting** (and high variance).
-- **Random Forest:** fully grown trees memorise too (train ~1.0), but averaging 200+ trees
-  still gives one of the best CV scores. The gap is large but "benign": it is how bagging
-  works, and the test score matches CV.
-- **Logistic Regression:** train = CV (gap ≈ 0), but about 0.10 below the ensembles.
-  **Underfitting**: a linear boundary cannot represent interactions such as "long lead time
-  *and* no deposit *and* agent 9".
+- **Random Forest:** fully grown trees memorise too (train ~1.0), and averaging 200 of them
+  still reaches a solid CV score (0.696). The gap is large but partly "benign" (it is how
+  bagging works, and the test score matches CV). Tuning with bigger leaves lifts CV to 0.716
+  and halves the gap.
+- **Logistic Regression:** train = CV (gap ≈ 0), about 0.04 below the best model, just inside
+  the 0.05 margin, so the rule labels it **good fit**. It sits on the underfitting border: a
+  linear boundary cannot represent interactions such as "long lead time *and* no deposit
+  *and* agent 9". Before country was dropped, the gap to the ensembles was 0.10 and it was
+  labelled underfitting; nationality was one of the signals the trees combined best.
 - **HistGradientBoosting:** the smallest gap among the strong models. Boosting adds trees
   only while they reduce the loss, and leaf-size / L2 limits keep each tree small.
-- **Learning curves** (`07_learning_curves.png`): Logistic Regression is flat from 25% of the
-  data (more data will not help a model that is too simple). The tree ensembles still gain
-  with more rows, a variance-limited regime where more data or more regularisation helps.
+- **Learning curves** (`07_learning_curves.png`): Logistic Regression is nearly flat
+  (+0.012 CV from 10% to 100% of the data), so more data will not help a model this simple.
+  The tree ensembles still gain with more rows (Random Forest +0.0055 on the last step), a
+  variance-limited regime where more data or more regularisation helps.
 - **Validation curve** (`08_validation_curve_depth.png`): Decision Tree CV PR-AUC peaks at
-  depth 12; depth 1-3 underfits, beyond that the train score keeps rising while CV
+  depth 10; depth 1-3 underfits, beyond that the train score keeps rising while CV
   falls.
 
 ### 7.3 Model selection rule (`src/train.py::select_final_model`), CV evidence only
@@ -289,33 +316,34 @@ model's 5-fold CV PR-AUC with suspected columns added or removed, on the trainin
 3. Pick the smallest train-CV gap, then the smaller file, then the faster prediction.
 
 ### 7.4 Selected model: **HistGradientBoosting (tuned)**
-- **Tied on CV** (within 0.005 of the best, 0.7794): HistGradientBoosting (tuned) (0.7794, gap 0.0601, 0.71 MB), Random Forest (tuned) (0.7786, gap 0.1204, 29.44 MB), HistGradientBoosting (0.7776, gap 0.0810, 0.45 MB).
-- **Chosen: HistGradientBoosting (tuned)**: the smallest train-CV gap of the tied models (0.0601, mild overfitting), 0.71 MB on disk, 7 ms per 1,000 predictions, 4.9 s to train.
-- **Confirmed once on the test set**: PR-AUC 0.7856 vs CV 0.7794, ROC-AUC 0.9069.
+- **Tied on CV** (within 0.005 of the best, 0.7157): Random Forest (tuned) (0.7157, gap 0.1299, 16.64 MB), HistGradientBoosting (tuned) (0.7149, gap 0.0546, 0.89 MB), HistGradientBoosting (0.7147, gap 0.0810, 0.44 MB).
+- **Chosen: HistGradientBoosting (tuned)**: the smallest train-CV gap of the tied models (0.0546, mild overfitting), 0.89 MB on disk, 7 ms per 1,000 predictions, 5.7 s to train.
+- **Confirmed once on the test set**: PR-AUC 0.7210 vs CV 0.7149, ROC-AUC 0.8553.
 
-- **Alternative considered:** Random Forest (tuned). Statistically tied on CV (0.7786) and
-  test, but its gap is larger, its file is 29.4 MB vs 0.71 MB, and it is slower
+- **Alternative considered:** Random Forest (tuned). Statistically tied on CV (0.7157) and
+  test, but its gap is larger, its file is 16.6 MB vs 0.89 MB, and it is slower
   to predict. On a 512 MB instance that is a real cost for no measurable gain.
 - **Interpretability trade-off:** HistGradientBoosting is less transparent than a single tree
   or Logistic Regression. This is mitigated with permutation importance, per-prediction "why"
   bars, and the interpretable models shown side by side in the app. Logistic Regression would
-  be the choice if every decision had to be explainable by a formula; it costs about 0.10
-  PR-AUC.
+  be the choice if every decision had to be explainable by a formula; it costs about 0.04
+  PR-AUC on CV, and it even does slightly better on the temporal split (10.2), which makes it a
+  credible fallback.
 
 ## 8. Decision threshold
 
-- **What:** threshold **0.59**, chosen to **maximise F1 on out-of-fold training
+- **What:** threshold **0.54**, chosen to **maximise F1 on out-of-fold training
   predictions** (`cross_val_predict` with the final pipeline).
 - **Why out-of-fold:** each training row is predicted by a model that never saw it, so the
   threshold is tuned on honest predictions without touching the test set.
 - **Why F1:** with no agreed cost figures, F1 balances "catch cancellations" (recall) against
   "don't raise false alarms" (precision). A **recall >= 80%** strategy is implemented too
-  (`THRESHOLD_STRATEGY = "recall_target"`) and gives 0.55.
-- **Effect (test):** at 0.50 precision 0.615 / recall 0.854 / F1 0.715; at 0.59 precision 0.669 / recall 0.775 / F1 0.718. A higher threshold means fewer false alarms at the price of a few more missed cancellations.
+  (`THRESHOLD_STRATEGY = "recall_target"`) and gives 0.43.
+- **Effect (test):** at 0.50 precision 0.584 / recall 0.745 / F1 0.654; at 0.54 precision 0.612 / recall 0.706 / F1 0.656. A higher threshold means fewer false alarms at the price of a few more missed cancellations.
 - **Business version:** the web app's calculator takes the hotel's own costs (empty room vs
   relocating an overbooked guest), picks the cost-minimising threshold on the out-of-fold
   predictions and reports the saving per 1,000 bookings on the test set. With the default
-  €250 / €400 it suggests 0.77.
+  €250 / €400 it suggests 0.78.
 
 ## 9. Explainability
 
@@ -330,21 +358,21 @@ model's 5-fold CV PR-AUC with suspected columns added or removed, on the trainin
   "why" bars cover local behaviour (9.3).
 
 ### 9.2 Main drivers (plain English)
-1. **is_domestic**: Bookings with is_domestic = 1 cancel 36%, vs 24% when it is 0.
+1. **total_of_special_requests**: Bookings with 1+ total_of_special_requests cancel 22%, vs 33% with none.
 2. **lead_time**: Top quarter of lead_time (>= 125) cancels 38%, bottom quarter (<= 11) 10%.
-3. **total_of_special_requests**: Bookings with 1+ total_of_special_requests cancel 22%, vs 33% with none.
-4. **agent**: agent = 9 cancels 40% of the time, vs 6% for 28.
-5. **market_segment**: market_segment = Online TA cancels 35% of the time, vs 12% for Corporate.
-6. **required_car_parking_spaces**: Bookings with 1+ required_car_parking_spaces cancel 0%, vs 30% with none.
-7. **previous_cancel_ratio**: Bookings with previous_cancel_ratio > 0 cancel 67%, vs 27% otherwise.
+3. **previous_cancel_ratio**: Bookings with previous_cancel_ratio > 0 cancel 67%, vs 27% otherwise.
+4. **market_segment**: market_segment = Online TA cancels 35% of the time, vs 12% for Corporate.
+5. **agent**: agent = 9 cancels 40% of the time, vs 6% for 28.
+6. **deposit_type**: deposit_type = Non Refund cancels 95% of the time, vs 27% for No Deposit.
+7. **required_car_parking_spaces**: Bookings with 1+ required_car_parking_spaces cancel 0%, vs 30% with none.
 8. **customer_type**: customer_type = Transient cancels 30% of the time, vs 15% for Transient-Party.
 
 Impurity importances of the Decision Tree and Random Forest (`11_tree_feature_importance.png`)
-agree with permutation importance on the main drivers: `lead_time`, `country`/`is_domestic`,
-`agent`, `market_segment` and special requests / parking. Impurity importance favours
-many-valued numeric columns, which is why the single tree also ranks `stay_value`,
-`adr_per_person` and `arrival_date_day_of_month` high; permutation importance shows those add
-little on unseen data.
+agree with permutation importance on the main drivers: `lead_time`, special requests,
+parking spaces, `agent` and `market_segment`. Impurity importance favours many-valued numeric
+columns, which is why the single tree ranks `stay_value`, `arrival_date_day_of_month`,
+`adr_per_person` and `adr` near the top; permutation importance shows those add little on
+unseen data.
 
 ### 9.3 "Why this prediction" in the app
 - **What:** for each input, the change in predicted probability when only that input is reset
@@ -356,41 +384,44 @@ little on unseen data.
 ## 10. Final evaluation and temporal check
 
 ### 10.1 Test set (single evaluation)
-| Metric | Threshold 0.50 | Tuned 0.59 |
+| Metric | Threshold 0.50 | Tuned 0.54 |
 |---|---:|---:|
-| Accuracy | 0.8129 | 0.8325 |
-| Precision | 0.6153 | 0.6688 |
-| Recall | 0.8537 | 0.7752 |
-| F1 | 0.7152 | 0.7181 |
-| ROC-AUC | 0.9069 | 0.9069 |
-| PR-AUC | 0.7856 | 0.7856 |
+| Accuracy | 0.7836 | 0.7960 |
+| Precision | 0.5836 | 0.6120 |
+| Recall | 0.7445 | 0.7062 |
+| F1 | 0.6543 | 0.6557 |
+| ROC-AUC | 0.8553 | 0.8553 |
+| PR-AUC | 0.7210 | 0.7210 |
 
-Confusion matrix at 0.59: 3,720 cancellations caught, 1,079 missed, 1,842 false alarms, 10,801 correct 'not canceled'.
+Confusion matrix at 0.54: 3,389 cancellations caught, 1,410 missed, 2,149 false alarms, 10,494 correct 'not canceled'.
 
-CV and test agree within 0.0062 PR-AUC for the selected model, which confirms that the
+CV and test agree within 0.0061 PR-AUC for the selected model, which confirms that the
 validation setup gave an honest estimate.
 
 ### 10.2 Temporal validation
 | Model | Random split PR-AUC | Temporal PR-AUC | Change | Temporal ROC-AUC |
 |---|---:|---:|---:|---:|
-| Logistic Regression | 0.6802 | 0.6910 | +0.0108 | 0.8332 |
-| Decision Tree | 0.4773 | 0.4744 | -0.0029 | 0.6618 |
-| Random Forest | 0.7762 | 0.6832 | -0.0930 | 0.8299 |
-| Random Forest (tuned) | 0.7851 | 0.6906 | -0.0945 | 0.8271 |
-| HistGradientBoosting | 0.7872 | 0.6990 | -0.0882 | 0.8351 |
-| HistGradientBoosting (tuned) | 0.7856 | 0.7028 | -0.0828 | 0.8366 |
-| K-Nearest Neighbors | 0.6755 | 0.6108 | -0.0647 | 0.7782 |
+| Logistic Regression | 0.6715 | 0.6773 | +0.0058 | 0.7902 |
+| Decision Tree | 0.4294 | 0.4286 | -0.0008 | 0.6165 |
+| Random Forest | 0.7040 | 0.6399 | -0.0641 | 0.7783 |
+| Random Forest (tuned) | 0.7232 | 0.6527 | -0.0705 | 0.7880 |
+| HistGradientBoosting | 0.7220 | 0.6661 | -0.0559 | 0.7909 |
+| HistGradientBoosting (tuned) | 0.7210 | 0.6704 | -0.0506 | 0.7925 |
+| K-Nearest Neighbors | 0.6214 | 0.5718 | -0.0496 | 0.7348 |
 
 Periods: train 2015-07-01 -> 2017-05-01 (69,664 rows), test 2017-05-02 -> 2017-08-31 (17,544 rows). The no-skill PR-AUC also rises from 0.257 to 0.347, so part of the change is the base rate itself; ROC-AUC (base-rate independent) tells the cleaner story.
 
 - **Interpretation:** the latest period (May–Aug 2017) cancels 34.7% of bookings vs
   25.7% before, and its season is under-represented in training. The random split
   hides this drift. ROC-AUC (which ignores the base rate) drops for **every** model, and the
-  tree ensembles drop the most: their lead over Logistic Regression shrinks from about 0.10 to
-  about 0.01 PR-AUC. Part of the extra structure they learn is season-specific and does not
-  carry over. The selected model is still the best on the future period, and its simpler
-  one-SE setting holds up better than the more complex top-CV setting from the first run
-  (0.694 on the same temporal split).
+  tree ensembles drop the most. Their lead over Logistic Regression disappears: on the later
+  period Logistic Regression has the best PR-AUC (0.677 vs 0.670 for the selected model), while
+  the selected model keeps a marginally better ROC-AUC (0.793 vs 0.790). Part of the extra
+  structure the ensembles learn is season-specific and does not carry over.
+- **Why this does not change the selection:** the selection rule uses CV on the random split
+  by design; the temporal check is a separate realism test (4.4). It does mean the expected
+  real-world score is closer to 0.67 than 0.72, and that a simpler model is a serious
+  candidate once drift is monitored. Worth re-testing with more seasons of data.
 - **Recommendation:** retrain monthly or quarterly on a rolling window, re-check the
   threshold each season, and monitor the cancel rate of predictions.
 
@@ -404,7 +435,7 @@ Periods: train 2015-07-01 -> 2017-05-01 (69,664 rows), test 2017-05-02 -> 2017-0
 
 ### 11.2 Everything precomputed
 - **What:** `main.py` writes `app/cache/dashboard.json`, `explore.json` and `predict.json`
-  (about 0.5 MB together). The server loads them plus the 3 MB final model; it never sees
+  (about 0.5 MB together). The server loads them plus the < 1 MB final model; it never sees
   the dataset or trains anything.
 - **Why:** Render's free instance has 512 MB RAM and sleeps when idle. The app uses about
   190 MB and starts in a few seconds.
