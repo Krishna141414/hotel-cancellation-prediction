@@ -37,7 +37,6 @@ FORM_FIELDS: dict[str, tuple[str, str, str, str]] = {
     "agent": ("Travel agent", "Booking", "select", "Anonymised agent ID"),
     "has_company": ("Paid by a company", "Booking", "toggle", ""),
     "days_in_waiting_list": ("Days on waiting list", "Booking", "range", ""),
-    "country": ("Country", "Guest", "select", "Guest nationality"),
     "is_repeated_guest": ("Repeat guest", "Guest", "toggle", "Stayed at this hotel before"),
     "previous_cancellations": ("Previous cancellations", "Guest", "range", ""),
     "previous_bookings_not_canceled": ("Previous stays kept", "Guest", "range", ""),
@@ -48,15 +47,10 @@ SELECT_FIELDS: list[str] = [name for name, spec in FORM_FIELDS.items() if spec[2
 TOGGLE_FIELDS: list[str] = [name for name, spec in FORM_FIELDS.items() if spec[2] == "toggle"]
 RANGE_FIELDS: list[str] = [name for name, spec in FORM_FIELDS.items() if spec[2] == "range"]
 
+# Country is not asked: it was dropped from the model (possible check-in leakage).
 VALUE_LABELS: dict[str, dict[str, str]] = {
     "meal": {"BB": "Bed & breakfast", "HB": "Half board", "FB": "Full board", "SC": "No meal"},
-    "country": {
-        "PRT": "Portugal", "GBR": "United Kingdom", "FRA": "France", "ESP": "Spain",
-        "DEU": "Germany", "ITA": "Italy", "IRL": "Ireland", "BEL": "Belgium", "BRA": "Brazil",
-        "NLD": "Netherlands", "USA": "United States", "CHE": "Switzerland", "AUT": "Austria",
-        "CN": "China", "SWE": "Sweden", "POL": "Poland", config.UNKNOWN_COUNTRY: "Unknown",
-    },
-}  # fmt: skip
+}
 
 
 def _option_label(field: str, value: object) -> str:
@@ -89,9 +83,7 @@ def _select_options(train_rows: pd.DataFrame, field: str) -> list[dict[str, Any]
         ``[{"value", "label"}]``.
     """
     counts = train_rows[field].value_counts()
-    if field == "country":
-        values = list(counts.index[: config.FORM_TOP_COUNTRIES]) + [config.OTHER_OPTION]
-    elif field == "agent":
+    if field == "agent":
         top = [v for v in counts.index if v != config.NO_AGENT_ID][: config.FORM_TOP_AGENTS]
         values = [config.NO_AGENT_ID, *top, config.OTHER_AGENT_ID]
     else:

@@ -36,6 +36,17 @@
   <div class="table-wrap"><table id="comparison-table"></table></div>
 </section>
 
+<section class="card section reveal">
+  <div class="card-head">
+    <div><h2>With vs without country</h2><p>The final model's settings trained twice: once with nationality (<code>country</code>, <code>is_domestic</code>) and once without. The deployed model is the one <strong>without</strong>.</p></div>
+    <span class="chip chip-bad">Dropped: possible leakage</span>
+  </div>
+  <div class="grid grid-3">
+    <div class="span-2"><div class="table-wrap"><table id="country-table"></table></div></div>
+    <div class="stack" id="country-why"><div class="skeleton"></div></div>
+  </div>
+</section>
+
 <section class="grid grid-2 section">
   <article class="card reveal">
     <div class="card-head"><div><h2>ROC curves</h2><p>Test set. Dashed line = random guessing.</p></div></div>

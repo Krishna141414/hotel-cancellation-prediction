@@ -93,7 +93,7 @@
           <tr><td>After cleaning (duplicates, invalid rows)</td><td class="num">{{ "{:,}".format(dataset.clean_rows) }}</td></tr>
           <tr><td>Train / test (stratified)</td><td class="num">{{ "{:,}".format(dataset.train_rows) }} / {{ "{:,}".format(dataset.test_rows) }}</td></tr>
           <tr><td>Model inputs (numeric · binary · categorical)</td><td class="num">{{ dataset.numeric|length }} · {{ dataset.binary|length }} · {{ dataset.categorical|length }}</td></tr>
-          <tr><td>Dropped for leakage</td><td class="num">reservation_status(_date), assigned_room_type, booking_changes</td></tr>
+          <tr><td>Dropped for leakage</td><td class="num">reservation_status(_date), assigned_room_type, booking_changes, country, is_domestic</td></tr>
         </tbody>
       </table>
     </div>

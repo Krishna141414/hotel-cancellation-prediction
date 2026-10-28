@@ -174,7 +174,13 @@ DROPPED_FEATURES: dict[str, str] = {
     "arrival_date_month": "Redundant: same information as arrival_month_num",
     "arrival_date_year": "Does not generalise: future bookings have unseen years",
     "babies": "Near-constant (98.9% zero); covered by has_children and total_guests",
+    # Task 3 (safer option): nationality may only be confirmed at check-in, which canceled
+    # bookings never reach, so it can encode the outcome. Kept only as an ablation.
+    "country": "Leakage risk: nationality may only be recorded at check-in",
+    "is_domestic": "Leakage risk: derived from country (PRT = domestic)",
 }
+# Columns dropped on leakage grounds whose effect is still reported (with vs without).
+COUNTRY_COLUMNS: list[str] = ["country", "is_domestic"]
 
 # Leakage ablation: CV score of the reference model with these input changes.
 # Each entry: label -> (columns to add, columns to remove).
@@ -184,7 +190,7 @@ ABLATION_VARIANTS: dict[str, tuple[list[str], list[str]]] = {
     "+ assigned_room_type": (["assigned_room_type"], []),
     "+ both post-booking columns": (["booking_changes", "assigned_room_type"], []),
     "- days_in_waiting_list": ([], ["days_in_waiting_list"]),
-    "- country & is_domestic": ([], ["country", "is_domestic"]),
+    "+ country & is_domestic": (["country", "is_domestic"], []),
 }
 
 # ---------------------------------------------------------------------------
@@ -411,7 +417,6 @@ NUMERIC_INPUT_RANGES: dict[str, tuple[float, float, float]] = {
     "days_in_waiting_list": (0, 400, 1),
 }
 # Most common categories offered in the form's select boxes (rest -> "Other").
-FORM_TOP_COUNTRIES: int = 12
 FORM_TOP_AGENTS: int = 10
 OTHER_OPTION: str = "Other"
 # An agent ID never seen in training: the encoder maps it to "infrequent" (= other agent).

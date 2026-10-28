@@ -4,9 +4,9 @@
   "use strict";
   const { data, chart, getChart, css, fmt, escapeHTML, modelColor, alpha, onTheme, selectedModel, modelSwitcher, segmented, showError } = window.App;
 
-  let models, final, setup, selection, state;
+  let models, final, setup, selection, country, state;
   try {
-    [models, final, setup, selection] = await Promise.all([data("models"), data("final"), data("setup"), data("selection")]);
+    [models, final, setup, selection, country] = await Promise.all([data("models"), data("final"), data("setup"), data("selection"), data("country_ablation")]);
   } catch (error) {
     return showError(document.getElementById("leaderboard"), error);
   }
@@ -29,9 +29,11 @@
     const ranked = models.filter((x) => x.rank !== null).sort((a, b) => a.rank - b.rank);
     const runnerUp = ranked.find((x) => x.base !== m.base) || ranked[1];
     const reasons = [
-      `<strong>Best CV ${labels[metric]}</strong>: ${fmt.num(m.cv[metric].mean)} ± ${fmt.num(m.cv[metric].std)}` +
+      `<strong>${best.key === m.key ? "Best" : "Tied for best"} CV ${labels[metric]}</strong>: ${fmt.num(m.cv[metric].mean)} ± ${fmt.num(m.cv[metric].std)}` +
         (best.key === m.key ? " (rank 1)" : ` (within ${selection.rule.match(/[\d.]+/)[0]} of the best)`),
-      `<strong>Beats ${escapeHTML(runnerUp.name)}</strong> by ${fmt.num(m.cv[metric].mean - runnerUp.cv[metric].mean)} CV ${labels[metric]}`,
+      m.cv[metric].mean >= runnerUp.cv[metric].mean
+        ? `<strong>Beats ${escapeHTML(runnerUp.name)}</strong> by ${fmt.num(m.cv[metric].mean - runnerUp.cv[metric].mean, 4)} CV ${labels[metric]}`
+        : `<strong>Ties with ${escapeHTML(runnerUp.name)}</strong>: ${fmt.num(runnerUp.cv[metric].mean - m.cv[metric].mean, 4)} lower CV ${labels[metric]}, well inside one fold std (${fmt.num(m.cv[metric].std, 4)})`,
       `<strong>Generalises</strong>: train–CV gap ${fmt.num(m.gap)} (${escapeHTML(m.diagnosis.label.toLowerCase())}); test ${fmt.num(m.test[metric])} matches CV`,
       `<strong>Deployable</strong>: ${fmt.mb(m.size_mb)} file, ${fmt.num(m.predict_ms_per_1k, 0)} ms per 1,000 predictions` +
         (byKey.rf_tuned || byKey.rf ? ` (Random Forest: ${fmt.mb((byKey.rf_tuned || byKey.rf).size_mb)})` : ""),
@@ -135,6 +137,32 @@
     sort = { key: th.dataset.key, dir: sort.key === th.dataset.key ? -sort.dir : th.dataset.key === "name" || th.dataset.key === "rank" ? 1 : -1 };
     renderTable();
   });
+
+  // ---------------------------------------------------------------- with vs without country
+  function renderCountry() {
+    const w = country.with, wo = country.without;
+    const row = (label, a, b) => {
+      const diff = a - b;
+      return `<tr><td>${label}</td><td class="num">${fmt.num(b)}</td><td class="num">${fmt.num(a)}</td><td class="num ${diff > 0 ? "up" : "down"}">${fmt.signed(diff)}</td></tr>`;
+    };
+    document.getElementById("country-table").innerHTML = `
+      <thead><tr><th>${escapeHTML(country.model)}</th><th>Without country (deployed, ${wo.inputs} inputs)</th><th>With country (${w.inputs} inputs)</th><th>Difference</th></tr></thead>
+      <tbody>
+        ${row(`CV ${labels[metric]} (training folds)`, w.cv[metric].mean, wo.cv[metric].mean)}
+        ${row(`CV ROC-AUC`, w.cv.roc_auc.mean, wo.cv.roc_auc.mean)}
+        ${row(`Train ${labels[metric]}`, w.train[metric], wo.train[metric])}
+        ${row(`Test ${labels[metric]}`, w.test[metric], wo.test[metric])}
+        ${row("Test ROC-AUC", w.test.roc_auc, wo.test.roc_auc)}
+        ${row(`Test F1 @ ${country.threshold.toFixed(2)}`, w.test.f1, wo.test.f1)}
+        ${row(`Test recall @ ${country.threshold.toFixed(2)}`, w.test.recall, wo.test.recall)}
+        ${row(`Test precision @ ${country.threshold.toFixed(2)}`, w.test.precision, wo.test.precision)}
+      </tbody>`;
+    const e = country.evidence;
+    document.getElementById("country-why").innerHTML = `
+      <div class="callout"><strong>Why we dropped it.</strong> ${escapeHTML(country.reason)}. Canceled bookings never reach check-in, so if a hotel system fills in or corrects nationality there, the column quietly tells the model who showed up.</div>
+      <div class="score-pair"><div><b class="up">${fmt.pct(e.domestic_cancel_rate, 0)}</b><span>Portuguese guests cancel</span></div><div><b>${fmt.pct(e.foreign_cancel_rate, 0)}</b><span>everyone else</span></div></div>
+      <p class="small">Portuguese guests are ${fmt.pct(e.domestic_share, 0)} of bookings but ${fmt.pct(e.domestic_share_of_cancellations, 0)} of cancellations. That's a strong pattern, and exactly what a check-in artefact would look like. We can't tell the two apart from the data, so we took the safer option: the model loses ${fmt.num(wo.cv[metric].mean - w.cv[metric].mean)} CV ${labels[metric]}, but every input it uses is known when the booking is made.</p>`;
+  }
 
   // ---------------------------------------------------------------- ROC / PR
   function curveChart(id, kind) {
@@ -319,6 +347,7 @@
     renderTable();
     renderH2H();
     renderTuning();
+    renderCountry();
   }
   modelSwitcher(document.getElementById("model-switcher"), models, { selected: state.selected, onChange: select });
   segmented(document.getElementById("metric-source"), (v) => {

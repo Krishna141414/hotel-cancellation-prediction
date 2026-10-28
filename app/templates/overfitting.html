@@ -74,7 +74,7 @@
       <li><strong>booking_changes</strong> is a count taken at the outcome date: bookings canceled early had less time to change.</li>
       <li>Both lift the score, which is exactly the warning sign. They're excluded so the model works at booking time.</li>
       <li><strong>days_in_waiting_list</strong> is known when the booking is confirmed, so it stays (and barely matters).</li>
-      <li><strong>country</strong> carries a lot of signal. It's kept as a booking-time field, but flagged in the decisions log.</li>
+      <li><strong>country / is_domestic</strong> lift the score a lot too, but nationality may only be recorded at check-in. As the safer option they're <strong>dropped</strong>; the with-vs-without numbers are on the Model comparison page.</li>
     </ul>
   </article>
 </section>

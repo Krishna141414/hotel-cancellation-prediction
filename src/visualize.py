@@ -735,7 +735,7 @@ def plot_temporal_vs_random(summary: dict[str, Any]) -> Figure:
         m for m in _models(summary, include_baseline=False) if m["key"] in temporal["metrics"]
     ]
     fig, (ax,) = new_figure(
-        "Predicting a later season is harder, and the ensembles lose most of their lead",
+        "Predicting a later season is harder, and the ensembles' lead over the linear model fades",
         f"Test {PRIMARY_LABEL}: random stratified split vs train before {temporal['cutoff']} / "
         f"test on later arrivals",
         figsize=(12, 4.8),

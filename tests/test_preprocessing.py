@@ -39,7 +39,17 @@ def test_selected_groups_exclude_dropped_and_leaky_columns() -> None:
     selected = set(FeatureGroups.selected().all)
     assert not selected & set(config.DROPPED_FEATURES)
     assert not selected & set(config.LEAKAGE_COLUMNS)
-    assert len(selected) == 33
+    assert len(selected) == 31
+
+
+def test_country_is_excluded_as_possible_leakage() -> None:
+    """Nationality may only be recorded at check-in, so neither column is a model input."""
+    selected = FeatureGroups.selected()
+    assert not set(config.COUNTRY_COLUMNS) & set(selected.all)
+    assert set(selected.with_columns(config.COUNTRY_COLUMNS).all) - set(selected.all) == {
+        "country",
+        "is_domestic",
+    }
 
 
 def test_with_columns_adds_to_the_right_group() -> None:

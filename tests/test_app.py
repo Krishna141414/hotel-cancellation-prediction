@@ -160,3 +160,16 @@ def test_pages_carry_data_version(client: FlaskClient, app_data: AppData) -> Non
     """Every page tells the front end which cache version to request (cache busting)."""
     assert len(app_data.version) == 10
     assert f'data-version="{app_data.version}"' in client.get("/").get_data(as_text=True)
+
+
+def test_form_does_not_ask_for_country(app_data: AppData) -> None:
+    """The dropped (possibly leaky) country column is not a form field."""
+    assert "country" not in {field["name"] for field in app_data.predict["fields"]}
+    assert "country" not in app_data.predict["defaults"]
+
+
+def test_country_ablation_section(client: FlaskClient) -> None:
+    """The with-vs-without-country result is served for the comparison page."""
+    data = client.get("/api/data/country_ablation").get_json()
+    assert data["with"]["inputs"] == data["without"]["inputs"] + 2
+    assert {"cv", "test", "confusion"} <= set(data["with"])

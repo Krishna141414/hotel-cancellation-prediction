@@ -21,6 +21,7 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.pipeline import Pipeline
 
 from app.build_cache import build_predict_cache
@@ -46,10 +47,11 @@ from src.insights import (
     logreg_coefficients,
     pca_projection,
 )
-from src.models import MODEL_SPECS, base_key, build_model_zoo
+from src.models import MODEL_SPECS, base_key, build_model_zoo, build_pipeline
 from src.train import (
     Dataset,
     ModelResult,
+    cross_validate_model,
     depth_validation_curve,
     fit_and_profile,
     leakage_ablation,
@@ -398,6 +400,75 @@ def extra_checks(
     return {"temporal": temporal, "ablation": ablation}
 
 
+@step("10b. With vs without country: the dropped columns, measured (evaluation only)")
+def country_comparison(
+    results: dict[str, ModelResult], final_key: str, threshold: float, dataset: Dataset
+) -> dict[str, Any]:
+    """Score the final model's configuration with country / is_domestic added back.
+
+    The columns were dropped on leakage grounds (nationality may only be recorded at
+    check-in), not because of their score, so this experiment decides nothing: it only
+    shows what the precaution costs. Both variants are refitted the same way and scored
+    on CV (training set) and once on the test set at the final threshold.
+
+    Args:
+        results: Fitted results.
+        final_key: Selected model key.
+        threshold: Final decision threshold.
+        dataset: Prepared dataset.
+
+    Returns:
+        ``{"without": ..., "with": ..., "evidence": ..., "reason": ...}``.
+    """
+    final = results[final_key]
+    with_groups = dataset.groups.with_columns(config.COUNTRY_COLUMNS)
+    pipeline = build_pipeline(base_key(final_key), with_groups, final.params)
+    with_cv = cross_validate_model(
+        final_key, pipeline, dataset.train_rows[with_groups.all], dataset.y_train
+    )
+    fitted = clone(pipeline).fit(dataset.train_rows[with_groups.all], dataset.y_train)
+    with_proba = fitted.predict_proba(dataset.test_rows[with_groups.all])[:, 1]
+    without_proba = final.extra["test_proba"]
+
+    def variant(inputs: int, cv: dict, train: dict, proba: np.ndarray) -> dict[str, Any]:
+        return {
+            "inputs": inputs,
+            "cv": cv,
+            "train": train,
+            "test": compute_metrics(dataset.y_test, proba, threshold),
+            "confusion": confusion(dataset.y_test, proba, threshold),
+        }
+
+    rows = dataset.train_rows
+    domestic = rows["is_domestic"] == 1
+    evidence = {
+        "domestic_cancel_rate": round(float(rows.loc[domestic, config.TARGET].mean()), 4),
+        "foreign_cancel_rate": round(float(rows.loc[~domestic, config.TARGET].mean()), 4),
+        "domestic_share": round(float(domestic.mean()), 4),
+        "domestic_share_of_cancellations": round(
+            float(domestic[rows[config.TARGET] == 1].mean()), 4
+        ),
+    }
+    result = {
+        "model": final.name,
+        "threshold": threshold,
+        "columns": config.COUNTRY_COLUMNS,
+        "reason": config.DROPPED_FEATURES["country"],
+        "without": variant(len(dataset.groups.all), final.cv, final.train, without_proba),
+        "with": variant(len(with_groups.all), with_cv.cv, with_cv.train, with_proba),
+        "evidence": evidence,
+    }
+    logger.info(
+        "Country: CV %s without %.4f vs with %.4f | test without %.4f vs with %.4f",
+        config.METRIC_LABELS[config.PRIMARY_METRIC],
+        final.cv_score,
+        with_cv.cv_score,
+        result["without"]["test"][config.PRIMARY_METRIC],
+        result["with"]["test"][config.PRIMARY_METRIC],
+    )
+    return result
+
+
 @step("11. Interactive exports: tree, falling bookings, playground, 3-D PCA, boosting replay")
 def interactive_exports(results: dict[str, ModelResult], dataset: Dataset) -> dict[str, Any]:
     """Precompute every interactive view of the web app.
@@ -552,6 +623,14 @@ def slim_metrics(summary: dict[str, Any]) -> dict[str, Any]:
         "models": [{k: v for k, v in m.items() if k not in heavy} for m in summary["models"]],
         "temporal": summary["temporal"],
         "ablation": summary["ablation"],
+        "country_ablation": {
+            k: v for k, v in summary["country_ablation"].items() if k not in {"with", "without"}
+        }
+        | {
+            variant: {"cv": summary["country_ablation"][variant]["cv"][config.PRIMARY_METRIC]}
+            | {"test": summary["country_ablation"][variant]["test"]}
+            for variant in ("with", "without")
+        },
         "validation_curve_best_depth": summary["validation_curve"]["best_depth"],
         "permutation_top10": summary["permutation"][:10],
     }
@@ -684,6 +763,9 @@ def main(quick: bool = False) -> None:
     final_eval = evaluate_on_test(results, selection["key"], threshold["chosen"], dataset)
     explanations = explain(results, selection["key"], dataset)
     checks = extra_checks(results, selection["key"], dataset)
+    checks["country_ablation"] = country_comparison(
+        results, selection["key"], threshold["chosen"], dataset
+    )
     explore = interactive_exports(results, dataset)
     parts = {"threshold": threshold, "final": final_eval, **curves, **explanations, **checks}
     summary = build_summary(dataset, results, selection, parts)

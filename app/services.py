@@ -40,6 +40,7 @@ DASHBOARD_SECTIONS: tuple[str, ...] = (
     "logreg_coefficients",
     "temporal",
     "ablation",
+    "country_ablation",
 )
 EXPLORE_SECTIONS: tuple[str, ...] = ("tree", "falling", "playground", "pca", "replay")
 
@@ -198,6 +199,9 @@ def bookings_to_inputs(bookings: list[dict[str, Any]], groups: FeatureGroups) ->
     frame["arrival_date_month"] = dates.dt.month_name()
     frame["arrival_date_day_of_month"] = dates.dt.day
     frame["has_agent"] = (frame["agent"] != config.NO_AGENT_ID).astype(int)
+    # Task 2's feature code derives is_domestic from country. Country is not a model input
+    # any more (possible check-in leakage), so a neutral placeholder is passed and dropped.
+    frame["country"] = config.UNKNOWN_COUNTRY
     return engineer_features(frame)[groups.all]
 
 
