@@ -300,6 +300,9 @@ SELECTION_TOLERANCE: float = 0.005
 MAX_DEPLOY_MODEL_MB: float = 50.0
 
 LEARNING_CURVE_SIZES: list[float] = [0.1, 0.25, 0.5, 0.75, 1.0]
+# `python main.py --quick` smoke-test budget.
+QUICK_TUNING_ITERATIONS: int = 2
+QUICK_CURVE_SIZES: list[float] = [0.3, 1.0]
 LEARNING_CURVE_MODELS: list[str] = ["logreg", "tree", "rf", "hgb"]
 VALIDATION_DEPTHS: list[int] = [1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40]
 
@@ -388,6 +391,8 @@ PLAYGROUND_PAIRS: list[tuple[str, str]] = [
     ("adr", "total_nights"),
 ]
 PLAYGROUND_QUANTILES: tuple[float, float] = (0.01, 0.99)
+PLAYGROUND_TREE_DEPTH: int = 3  # the shallow tree in the playground
+PLAYGROUND_KNN_NEIGHBORS: int = 15
 SWEEP_POINTS: int = 25  # what-if curves on the Predict page
 
 # Predict form: numeric field -> (min, max, step) accepted by the API.

@@ -67,9 +67,6 @@ from src.visualize import generate_figures, model_color
 
 logger = logging.getLogger("main")
 
-QUICK_TUNING_ITERATIONS: int = 2
-QUICK_CURVE_SIZES: list[float] = [0.3, 1.0]
-
 
 def step(title: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator that logs a banner and the elapsed time around a pipeline step.
@@ -184,7 +181,7 @@ def tune_top_models(
     top = rank_models(results)[: config.N_MODELS_TO_TUNE]
     logger.info("Top %d by CV: %s", len(top), [results[k].name for k in top])
     for key in top:
-        n_iter = QUICK_TUNING_ITERATIONS if quick else None
+        n_iter = config.QUICK_TUNING_ITERATIONS if quick else None
         tuned = tune_model(key, dataset.groups, dataset.x_train, dataset.y_train, n_iter=n_iter)
         results[tuned.key] = tuned
     order = [k for base in MODEL_SPECS for k in (base, f"{base}{config.TUNED_SUFFIX}")]
@@ -278,7 +275,7 @@ def overfitting_curves(
     for base in config.LEARNING_CURVE_MODELS:
         key = f"{base}{config.TUNED_SUFFIX}" if f"{base}{config.TUNED_SUFFIX}" in results else base
         logger.info("  learning curve: %s", results[key].name)
-        sizes = QUICK_CURVE_SIZES if quick else config.LEARNING_CURVE_SIZES
+        sizes = config.QUICK_CURVE_SIZES if quick else config.LEARNING_CURVE_SIZES
         curves[key] = learning_curve_data(
             results[key].pipeline, dataset.x_train, dataset.y_train, sizes
         )

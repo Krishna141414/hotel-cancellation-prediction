@@ -194,9 +194,9 @@ def falling_paths(
 # ---------------------------------------------------------------------------
 PLAYGROUND_MODELS: dict[str, str] = {
     "logreg": "Logistic Regression (straight line)",
-    "tree_shallow": "Decision Tree, depth 3",
+    "tree_shallow": f"Decision Tree, depth {config.PLAYGROUND_TREE_DEPTH}",
     "tree_deep": "Decision Tree, no depth limit",
-    "knn": "KNN, k = 15",
+    "knn": f"KNN, k = {config.PLAYGROUND_KNN_NEIGHBORS}",
     "hgb": "HistGradientBoosting",
 }
 
@@ -214,12 +214,16 @@ def _playground_estimator(key: str) -> Pipeline:
     estimators = {
         "logreg": make_pipeline(StandardScaler(), LogisticRegression(class_weight="balanced")),
         "tree_shallow": make_pipeline(
-            DecisionTreeClassifier(max_depth=3, class_weight="balanced", random_state=seed)
+            DecisionTreeClassifier(
+                max_depth=config.PLAYGROUND_TREE_DEPTH, class_weight="balanced", random_state=seed
+            )
         ),
         "tree_deep": make_pipeline(
             DecisionTreeClassifier(class_weight="balanced", random_state=seed)
         ),
-        "knn": make_pipeline(StandardScaler(), KNeighborsClassifier(n_neighbors=15)),
+        "knn": make_pipeline(
+            StandardScaler(), KNeighborsClassifier(n_neighbors=config.PLAYGROUND_KNN_NEIGHBORS)
+        ),
         "hgb": make_pipeline(
             HistGradientBoostingClassifier(class_weight="balanced", random_state=seed)
         ),
