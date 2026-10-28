@@ -50,7 +50,8 @@
   const cache = {};
   function data(section) {
     if (!cache[section]) {
-      cache[section] = fetch(`/api/data/${section}`).then((response) => {
+      // ?v=<content hash> lets the browser cache data but never serve it stale after a redeploy.
+      cache[section] = fetch(`/api/data/${section}?v=${document.body.dataset.version || ""}`).then((response) => {
         if (!response.ok) throw new Error(`Could not load ${section} (${response.status})`);
         return response.json();
       });

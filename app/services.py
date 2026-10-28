@@ -4,6 +4,7 @@ The server only loads small precomputed JSON files and the final model, never
 the dataset, so it fits comfortably in a 512 MB free instance.
 """
 
+import hashlib
 import json
 import logging
 import random
@@ -68,6 +69,7 @@ class AppData:
     explore: dict[str, Any]
     predict: dict[str, Any]
     model: Pipeline
+    version: str = "dev"
 
     def section(self, name: str) -> Any:  # noqa: ANN401
         """One named section of the precomputed data.
@@ -96,17 +98,34 @@ class AppData:
         return next(m for m in self.dashboard["models"] if m["key"] == key)
 
 
+def cache_version(paths: tuple[Path, ...]) -> str:
+    """Short content hash of the cache files, used to bust browser caches after a redeploy.
+
+    Args:
+        paths: Cache files.
+
+    Returns:
+        First 10 hex characters of their combined SHA-256.
+    """
+    digest = hashlib.sha256()
+    for path in paths:
+        digest.update(path.read_bytes())
+    return digest.hexdigest()[:10]
+
+
 def load_app_data() -> AppData:
     """Load the caches and the final model from disk.
 
     Returns:
         The app data.
     """
+    cache_files = (config.APP_DASHBOARD_CACHE, config.APP_EXPLORE_CACHE, config.APP_PREDICT_CACHE)
     data = AppData(
         dashboard=_read_json(config.APP_DASHBOARD_CACHE),
         explore=_read_json(config.APP_EXPLORE_CACHE),
         predict=_read_json(config.APP_PREDICT_CACHE),
         model=joblib.load(config.FINAL_MODEL_PATH),
+        version=cache_version(cache_files),
     )
     logger.info("Loaded app data and final model (%s)", data.dashboard["final"]["name"])
     return data

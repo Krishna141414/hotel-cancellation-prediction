@@ -465,8 +465,8 @@ def plot_overfitting_gaps(summary: dict[str, Any]) -> Figure:
     ax.set_ylim(0, 1.12)
     ax.grid(axis="x", visible=False)
     ax.set_ylabel(PRIMARY_LABEL)
-    ax.legend(ncols=3, loc="upper left", bbox_to_anchor=(0, 1.0))
-    fig.subplots_adjust(bottom=0.17)
+    ax.legend(ncols=3, loc="upper center", bbox_to_anchor=(0.5, -0.16))
+    fig.subplots_adjust(bottom=0.24)
     return fig
 
 
@@ -735,7 +735,7 @@ def plot_temporal_vs_random(summary: dict[str, Any]) -> Figure:
         m for m in _models(summary, include_baseline=False) if m["key"] in temporal["metrics"]
     ]
     fig, (ax,) = new_figure(
-        "Scores drop when predicting a future period: the data drifts over time",
+        "Predicting a later season is harder, and the ensembles lose most of their lead",
         f"Test {PRIMARY_LABEL}: random stratified split vs train before {temporal['cutoff']} / "
         f"test on later arrivals",
         figsize=(12, 4.8),

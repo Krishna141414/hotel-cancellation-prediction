@@ -154,3 +154,9 @@ def test_every_cached_sample_can_be_predicted(app_data: AppData) -> None:
     for _ in range(25):
         booking = validate_booking(random_sample(app_data, rng), app_data.predict["fields"])
         assert 0 <= predictor.predict(booking)["probability"] <= 1
+
+
+def test_pages_carry_data_version(client: FlaskClient, app_data: AppData) -> None:
+    """Every page tells the front end which cache version to request (cache busting)."""
+    assert len(app_data.version) == 10
+    assert f'data-version="{app_data.version}"' in client.get("/").get_data(as_text=True)

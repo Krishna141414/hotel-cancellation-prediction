@@ -5,11 +5,19 @@ Production:    gunicorn app.app:app         (settings in gunicorn.conf.py)
 """
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from flask import Flask, Response, jsonify, render_template, request
 
-from app.services import AppData, Predictor, load_app_data, random_sample, validate_booking
+from app.services import (
+    AppData,
+    Predictor,
+    cache_version,
+    load_app_data,
+    random_sample,
+    validate_booking,
+)
 from src import config
 
 logger = logging.getLogger(__name__)
@@ -52,6 +60,7 @@ def create_app(data: AppData | None = None) -> Flask:
     app.json.sort_keys = False
     data = data or load_app_data()
     predictor = Predictor(data)
+    asset_version = cache_version(tuple(sorted(Path(app.static_folder).rglob("*.*"))))
 
     @app.context_processor
     def inject_layout() -> dict[str, Any]:
@@ -62,6 +71,8 @@ def create_app(data: AppData | None = None) -> Flask:
             "final_model": data.final_model,
             "dataset": data.dashboard["dataset"],
             "setup": data.dashboard["setup"],
+            "data_version": data.version,
+            "asset_version": asset_version,
         }
 
     # -- Pages ----------------------------------------------------------------

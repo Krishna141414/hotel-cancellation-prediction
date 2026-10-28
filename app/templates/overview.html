@@ -116,5 +116,5 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/overview.js') }}"></script>
+<script src="{{ url_for('static', filename='js/overview.js', v=asset_version) }}"></script>
 {% endblock %}

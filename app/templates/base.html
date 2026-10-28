@@ -16,9 +16,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=asset_version) }}">
 </head>
-<body data-page="{{ page }}">
+<body data-page="{{ page }}" data-version="{{ data_version }}">
   <header class="site-header">
     <div class="container header-inner">
       <a class="brand" href="{{ url_for('overview') }}" aria-label="CancelSense home">
@@ -51,8 +51,8 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="{{ url_for('static', filename='js/core.js') }}"></script>
-  <script src="{{ url_for('static', filename='js/widgets.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/core.js', v=asset_version) }}"></script>
+  <script src="{{ url_for('static', filename='js/widgets.js', v=asset_version) }}"></script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
